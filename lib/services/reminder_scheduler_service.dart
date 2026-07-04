@@ -133,7 +133,7 @@ class ReminderSchedulerService {
     }
 
     // Small delay to ensure overlay is ready
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 1000));
     await FlutterOverlayWindow.shareData(overlayData);
   }
 

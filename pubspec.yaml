@@ -36,12 +36,12 @@ flutter:
       fonts:
         - asset: assets/fonts/UthmanicHafs1Ver18.ttf
 
-flutter_icons:
+flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icon/icon.png"
+  image_path: "assets/images/logo.png"
   adaptive_icon_background: "#0F5132"
-  adaptive_icon_foreground: "assets/icon/icon_fg.png"
+  adaptive_icon_foreground: "assets/images/logo.png"
   android_round: true
   web:
     generate: true

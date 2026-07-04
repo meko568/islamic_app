@@ -354,10 +354,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: OutlinedButton.icon(
               onPressed: () async {
+                bool isGranted = await FlutterOverlayWindow.isPermissionGranted();
+                if (!isGranted) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(AppStrings.get('overlay_permission_required', lang))),
+                    );
+                    await FlutterOverlayWindow.requestPermission();
+                  }
+                  return;
+                }
+                
                 await ReminderSchedulerService.showImmediate();
+                
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('تم إرسال طلب عرض التذكير...')),
+                  );
+                }
               },
               icon: const Icon(Icons.play_arrow),
-              label: const Text('تجربة التذكير الآن'),
+              label: Text(AppStrings.get('test_reminder', lang)),
             ),
           ),
         const Divider(height: 32),
