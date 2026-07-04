@@ -69,72 +69,136 @@ class ReminderSchedulerService {
 
   // Show reminder immediately (for testing or first run)
   static Future<void> showImmediate() async {
-    await _handleReminderTask();
-  }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final settingsJson = prefs.getString('reminder_settings');
 
-  @pragma('vm:entry-point')
-  static Future<void> _handleReminderTask() async {
-    final prefs = await SharedPreferences.getInstance();
-    final settingsJson = prefs.getString('reminder_settings');
+      if (settingsJson == null) return;
 
-    if (settingsJson == null) return;
+      final settings = ReminderSettings.fromJsonString(settingsJson);
 
-    final settings = ReminderSettings.fromJsonString(settingsJson);
+      if (settings.selectedTasbeehIds.isEmpty) {
+        return;
+      }
 
-    if (!settings.enabled || settings.selectedTasbeehIds.isEmpty) {
-      return;
-    }
+      // Check overlay permission
+      if (!await FlutterOverlayWindow.isPermissionGranted()) {
+        await FlutterOverlayWindow.requestPermission();
+        return;
+      }
 
-    // Check overlay permission one last time
-    if (!await FlutterOverlayWindow.isPermissionGranted()) {
-      return;
-    }
+      final lastIndex = prefs.getInt(_lastShownIndexKey) ?? 0;
+      final selectedIds = settings.selectedTasbeehIds;
+      final nextIndex = (lastIndex + 1) % selectedIds.length;
+      final tasbeehId = selectedIds[nextIndex];
 
-    final lastCompletedTimestamp = prefs.getInt(_lastCompletedTimestampKey);
-    if (lastCompletedTimestamp != null) {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final elapsedMinutes = (now - lastCompletedTimestamp) / 60000;
-      // Don't show if completed less than 5 mins ago, UNLESS it's a manual trigger (but we don't distinguish here)
-      // For manual trigger from settings, we might want to bypass this.
-    }
+      final tasbeehText = await _getTasbeehText(tasbeehId);
+      final targetCount = await _getTasbeehTargetCount(tasbeehId);
+      final allowCloseAnytime = settings.allowCloseAnytime;
+      final lang = prefs.getString('app_language') ?? 'ar';
 
-    final lastIndex = prefs.getInt(_lastShownIndexKey) ?? 0;
-    final selectedIds = settings.selectedTasbeehIds;
-    final nextIndex = (lastIndex + 1) % selectedIds.length;
-    final tasbeehId = selectedIds[nextIndex];
+      final overlayData = {
+        'tasbeehId': tasbeehId,
+        'tasbeehText': tasbeehText,
+        'targetCount': targetCount,
+        'allowCloseAnytime': allowCloseAnytime,
+        'lang': lang,
+      };
 
-    await prefs.setInt(_lastShownIndexKey, nextIndex);
+      await prefs.setString('current_overlay_data', jsonEncode(overlayData));
 
-    final tasbeehText = await _getTasbeehText(tasbeehId);
-    final targetCount = await _getTasbeehTargetCount(tasbeehId);
-    final allowCloseAnytime = settings.allowCloseAnytime;
-    final lang = prefs.getString('app_language') ?? 'ar';
+      // Always close and re-open for "Test" button to ensure it shows
+      await FlutterOverlayWindow.closeOverlay();
+      await Future.delayed(const Duration(milliseconds: 500));
 
-    final overlayData = {
-      'tasbeehId': tasbeehId,
-      'tasbeehText': tasbeehText,
-      'targetCount': targetCount,
-      'allowCloseAnytime': allowCloseAnytime,
-      'lang': lang,
-    };
-
-    // Store in prefs as well so overlay can read it on start
-    await prefs.setString('current_overlay_data', jsonEncode(overlayData));
-
-    if (!await FlutterOverlayWindow.isActive()) {
       await FlutterOverlayWindow.showOverlay(
-        height: 500, // Increased height
-        width: 400,  // Increased width
+        height: 600,
+        width: 500,
         overlayTitle: AppStrings.get('tasbeeh_reminder_overlay_title', lang),
         overlayContent: AppStrings.get('tasbeeh_reminder_overlay_content', lang),
         flag: OverlayFlag.defaultFlag,
         visibility: NotificationVisibility.visibilityPublic,
+        enableDrag: true,
       );
-    }
 
-    // Small delay to ensure overlay is ready
-    await Future.delayed(const Duration(milliseconds: 1000));
-    await FlutterOverlayWindow.shareData(overlayData);
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await FlutterOverlayWindow.shareData(overlayData);
+    } catch (e) {
+      debugPrint('Error showing overlay: $e');
+    }
+  }
+
+  @pragma('vm:entry-point')
+  static Future<void> _handleReminderTask() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final settingsJson = prefs.getString('reminder_settings');
+
+      if (settingsJson == null) return;
+
+      final settings = ReminderSettings.fromJsonString(settingsJson);
+
+      if (!settings.enabled || settings.selectedTasbeehIds.isEmpty) {
+        return;
+      }
+
+      // Check overlay permission
+      if (!await FlutterOverlayWindow.isPermissionGranted()) {
+        return;
+      }
+
+      final lastCompletedTimestamp = prefs.getInt(_lastCompletedTimestampKey);
+      if (lastCompletedTimestamp != null) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final elapsedMinutes = (now - lastCompletedTimestamp) / 60000;
+        if (elapsedMinutes < 5) {
+          return;
+        }
+      }
+
+      final lastIndex = prefs.getInt(_lastShownIndexKey) ?? 0;
+      final selectedIds = settings.selectedTasbeehIds;
+      final nextIndex = (lastIndex + 1) % selectedIds.length;
+      final tasbeehId = selectedIds[nextIndex];
+
+      await prefs.setInt(_lastShownIndexKey, nextIndex);
+
+      final tasbeehText = await _getTasbeehText(tasbeehId);
+      final targetCount = await _getTasbeehTargetCount(tasbeehId);
+      final allowCloseAnytime = settings.allowCloseAnytime;
+      final lang = prefs.getString('app_language') ?? 'ar';
+
+      final overlayData = {
+        'tasbeehId': tasbeehId,
+        'tasbeehText': tasbeehText,
+        'targetCount': targetCount,
+        'allowCloseAnytime': allowCloseAnytime,
+        'lang': lang,
+      };
+
+      await prefs.setString('current_overlay_data', jsonEncode(overlayData));
+
+      // Close and re-open to ensure it shows reliably
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      await FlutterOverlayWindow.showOverlay(
+        height: 600,
+        width: 500,
+        overlayTitle: AppStrings.get('tasbeeh_reminder_overlay_title', lang),
+        overlayContent: AppStrings.get('tasbeeh_reminder_overlay_content', lang),
+        flag: OverlayFlag.defaultFlag,
+        visibility: NotificationVisibility.visibilityPublic,
+        enableDrag: true,
+      );
+
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await FlutterOverlayWindow.shareData(overlayData);
+    } catch (e) {
+      debugPrint('Error handling reminder task: $e');
+    }
   }
 
   // Helper to get tasbeeh text

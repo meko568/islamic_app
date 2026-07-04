@@ -52,8 +52,11 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
       final position = await PrayerService.getCurrentLocation();
 
       if (position == null) {
+        bool isEnabled = await Geolocator.isLocationServiceEnabled();
         setState(() {
-          _errorMessage = AppStrings.get('location_error', lang);
+          _errorMessage = isEnabled 
+            ? AppStrings.get('location_error', lang)
+            : AppStrings.get('location_settings_desc', lang);
           _isLoading = false;
         });
         return;

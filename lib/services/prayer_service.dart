@@ -94,7 +94,7 @@ class PrayerService {
 
     // Check if location services are enabled.
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    
+
     permission = await Geolocator.checkPermission();
 
     if (permission == LocationPermission.denied) {

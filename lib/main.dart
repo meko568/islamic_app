@@ -13,6 +13,8 @@ import 'theme/app_theme.dart';
 import 'providers/settings_provider.dart';
 import 'providers/reminder_provider.dart';
 import 'services/reminder_scheduler_service.dart';
+import 'overlay/tasbeeh_overlay_app.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +22,13 @@ Future<void> main() async {
     await ReminderSchedulerService.initialize();
   }
   runApp(const IslamicApp());
+}
+
+// Ensure the overlay entry point is registered
+@pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const TasbeehOverlayApp());
 }
 
 class IslamicApp extends StatelessWidget {

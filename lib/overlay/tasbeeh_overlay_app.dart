@@ -6,13 +6,6 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/reminder_scheduler_service.dart';
 
-// Overlay entry point - runs in separate Flutter engine
-@pragma('vm:entry-point')
-void overlayMain() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const TasbeehOverlayApp());
-}
-
 class TasbeehOverlayApp extends StatefulWidget {
   const TasbeehOverlayApp({super.key});
 
@@ -61,8 +54,8 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
         _targetCount = data['targetCount'] ?? 100;
         _allowCloseAnytime = data['allowCloseAnytime'] ?? false;
         _lang = data['lang'] ?? 'ar';
-        // Only reset count if text changes
-        // This prevents resetting if data is re-shared
+        _currentCount = 0;
+        _isCompleted = false;
       });
     }
   }
@@ -87,7 +80,11 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
     });
 
     // Mark as completed in scheduler
-    await ReminderSchedulerService.markAsCompleted();
+    try {
+      await ReminderSchedulerService.markAsCompleted();
+    } catch (e) {
+      // Ignore
+    }
 
     // Auto-close after 1.5 seconds
     _completionTimer = Timer(const Duration(milliseconds: 1500), () {
@@ -96,9 +93,7 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
   }
 
   void _closeOverlay() {
-    if (_allowCloseAnytime) {
-      FlutterOverlayWindow.closeOverlay();
-    }
+    FlutterOverlayWindow.closeOverlay();
   }
 
   @override
@@ -109,6 +104,14 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
 
   @override
   Widget build(BuildContext context) {
+    if (_tasbeehText.isEmpty && !_isCompleted) {
+      return const MaterialApp(
+        home: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -118,59 +121,62 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
           brightness: Brightness.light,
         ),
       ),
-      home: Material(
-        color: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF8F0),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 20,
-                spreadRadius: 5,
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              // Close button (only if allowCloseAnytime)
-              if (_allowCloseAnytime)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: _closeOverlay,
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.3),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.close,
-                        size: 18,
-                        color: Colors.grey,
+      home: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(
+          child: Container(
+            margin: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF8F0),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                // Close button
+                if (_allowCloseAnytime)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: GestureDetector(
+                      onTap: _closeOverlay,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withValues(alpha: 0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Colors.grey,
+                        ),
                       ),
                     ),
                   ),
-                ),
 
-              // Main content
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_isCompleted)
-                      _buildCompletionView()
-                    else
-                      _buildTasbeehView(),
-                  ],
+                // Main content
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_isCompleted)
+                        _buildCompletionView()
+                      else
+                        _buildTasbeehView(),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

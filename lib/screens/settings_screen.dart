@@ -369,7 +369,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('تم إرسال طلب عرض التذكير...')),
+                    const SnackBar(
+                      content: Text('جاري محاولة إظهار التذكير... تأكد من السماح بالظهور فوق التطبيقات'),
+                      duration: Duration(seconds: 4),
+                    ),
                   );
                 }
               },

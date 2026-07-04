@@ -166,6 +166,15 @@ class ReminderProvider extends ChangeNotifier {
       'targetCount': targetCount,
     });
     await _saveCustomTasbeehList();
+    
+    // Also auto-select it
+    final currentList = List<String>.from(
+      _settings.selectedTasbeehIds.whereType<String>(),
+    );
+    currentList.add(id);
+    _settings = _settings.copyWith(selectedTasbeehIds: currentList);
+    await saveSettings();
+
     notifyListeners();
   }
 
