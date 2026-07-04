@@ -341,8 +341,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             }
             await reminderProvider.setEnabled(value);
             await ReminderSchedulerService.rescheduleAll();
+            
+            if (value && context.mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('تم تفعيل التذكير بنجاح. سيظهر التذكير القادم خلال الفترة المحددة.')),
+              );
+            }
           },
         ),
+        if (settings.enabled)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                await ReminderSchedulerService.showImmediate();
+              },
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('تجربة التذكير الآن'),
+            ),
+          ),
         const Divider(height: 32),
 
         // Interval selector

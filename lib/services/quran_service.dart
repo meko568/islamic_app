@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import '../models/surah_model.dart';
@@ -7,30 +8,45 @@ import '../models/surah_model.dart';
 class QuranService {
   static const String _baseUrl = 'https://api.alquran.cloud/v1/quran/quran-uthmani';
   static const String _cacheFileName = 'quran_cache.json';
+  static const String _assetPath = 'assets/data/quran_data.json';
 
-  // Fetch full Quran text with caching
+  // Fetch full Quran text with caching and asset fallback
   static Future<List<Surah>> getQuran() async {
-    // Check if cached data exists
+    // 1. Check if cached data exists in local storage
     final cachedData = await _loadCachedData();
     if (cachedData != null) {
       return cachedData;
     }
 
-    // Fetch from API
-    final response = await http.get(Uri.parse(_baseUrl));
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+    // 2. Try to load from bundled assets (Offline First)
+    try {
+      final String response = await rootBundle.loadString(_assetPath);
+      final data = json.decode(response);
       final surahs = (data['data']['surahs'] as List)
           .map((e) => Surah.fromJson(e as Map<String, dynamic>))
           .toList();
-
-      // Cache the data
+      
+      // Cache it for faster loading next time
       await _cacheData(surahs);
-
       return surahs;
-    } else {
-      throw Exception('Failed to load Quran');
+    } catch (e) {
+      // 3. Fallback to API if asset is missing or corrupted
+      try {
+        final response = await http.get(Uri.parse(_baseUrl));
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          final surahs = (data['data']['surahs'] as List)
+              .map((e) => Surah.fromJson(e as Map<String, dynamic>))
+              .toList();
+
+          await _cacheData(surahs);
+          return surahs;
+        }
+      } catch (apiError) {
+        throw Exception('Failed to load Quran from all sources');
+      }
     }
+    throw Exception('Failed to load Quran');
   }
 
   // Load cached data from file

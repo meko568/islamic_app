@@ -260,9 +260,17 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
             style: const TextStyle(fontSize: 16),
           ),
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _initializePrayerTimes,
-            child: Text(AppStrings.get('retry', lang)),
+          ElevatedButton.icon(
+            onPressed: () async {
+              bool isEnabled = await Geolocator.isLocationServiceEnabled();
+              if (!isEnabled) {
+                await Geolocator.openLocationSettings();
+              } else {
+                _initializePrayerTimes();
+              }
+            },
+            icon: const Icon(Icons.refresh),
+            label: Text(AppStrings.get('retry', lang)),
           ),
         ],
       ),

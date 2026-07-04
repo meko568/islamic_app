@@ -92,30 +92,38 @@ class PrayerService {
     bool serviceEnabled;
     LocationPermission permission;
 
+    // Check if location services are enabled.
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return await Geolocator.getLastKnownPosition();
-    }
-
+    
     permission = await Geolocator.checkPermission();
 
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
+        // Permissions are denied, try last known position
         return await Geolocator.getLastKnownPosition();
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
+      // Permissions are denied forever, try last known position
+      return await Geolocator.getLastKnownPosition();
+    }
+
+    if (!serviceEnabled) {
+      // Location services are not enabled but we have permission.
+      // We can't get current position, so try last known.
       return await Geolocator.getLastKnownPosition();
     }
 
     try {
+      // Try getting current position with a timeout
       return await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 10),
+        timeLimit: const Duration(seconds: 8),
       );
     } catch (e) {
+      // If fails (timeout or other), try last known position as a last resort
       return await Geolocator.getLastKnownPosition();
     }
   }

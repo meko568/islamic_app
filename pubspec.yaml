@@ -42,6 +42,20 @@ flutter_icons:
   image_path: "assets/icon/icon.png"
   adaptive_icon_background: "#0F5132"
   adaptive_icon_foreground: "assets/icon/icon_fg.png"
+  android_round: true
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#0F5132"
+    theme_color: "#0F5132"
+  windows:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: "assets/icon/icon.png"
+
 
 flutter_native_splash:
   color: "#0F5132"

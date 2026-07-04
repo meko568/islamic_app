@@ -18,19 +18,19 @@ class Surah {
   });
 
   factory Surah.fromJson(Map<String, dynamic> json) {
+    final ayahsList = json['ayahs'] as List?;
+    final ayahs = ayahsList != null
+        ? ayahsList.map((e) => Ayah.fromJson(e as Map<String, dynamic>)).toList()
+        : null;
+
     return Surah(
       number: json['number'] as int? ?? 0,
       nameArabic: json['name'] as String? ?? '',
       nameEnglish: json['englishName'] as String? ?? '',
       nameEnglishTranslation: json['englishNameTranslation'] as String? ?? '',
-      ayahCount: json['numberOfAyahs'] as int? ?? 0,
+      ayahCount: json['numberOfAyahs'] as int? ?? ayahs?.length ?? 0,
       revelationType: json['revelationType'] as String? ?? '',
-      ayahs:
-          json['ayahs'] != null
-              ? (json['ayahs'] as List)
-                  .map((e) => Ayah.fromJson(e as Map<String, dynamic>))
-                  .toList()
-              : null,
+      ayahs: ayahs,
     );
   }
 

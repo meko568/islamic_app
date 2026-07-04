@@ -78,6 +78,11 @@ class AppStrings {
       'tap_to_download_mushaf': 'اضغط لتحميل المصحف',
       'no_data_available': 'لا توجد بيانات متاحة',
       'page_number': 'صفحة {page}',
+      'quran_text_not_downloaded': 'نص القرآن غير محمل',
+      'tap_to_download_text': 'اضغط للتحميل (يحتاج إنترنت لمرة واحدة)',
+      'download_now': 'تحميل الآن',
+      'error_loading_image': 'خطأ في تحميل الصورة',
+      'retry_download': 'إعادة التحميل',
       'location_unavailable': 'تعذر الحصول على الموقع. يرجى تفعيل خدمة الموقع.',
       'refresh': 'تحديث',
       'latitude_longitude': 'خط العرض: {lat}, خط الطول: {long}',
@@ -144,6 +149,9 @@ class AppStrings {
       'no_tasbeeh_selected_desc': 'يرجى اختيار ذكر واحد على الأقل للتفعيل',
       'ok': 'موافق',
       'cancel': 'إلغاء',
+      'test_reminder': 'تجربة التذكير الآن',
+      'reminder_enabled_success': 'تم تفعيل التذكير بنجاح. سيظهر التذكير القادم خلال الفترة المحددة.',
+      'location_settings_desc': 'خدمة الموقع مغلقة. يرجى تفعيل GPS للمتابعة.',
     },
     'en': {
       'home': 'Home',
@@ -224,6 +232,11 @@ class AppStrings {
       'tap_to_download_mushaf': 'Tap to download Mushaf',
       'no_data_available': 'No data available',
       'page_number': 'Page {page}',
+      'quran_text_not_downloaded': 'Quran text not downloaded',
+      'tap_to_download_text': 'Tap to download (requires internet once)',
+      'download_now': 'Download Now',
+      'error_loading_image': 'Error loading image',
+      'retry_download': 'Retry Download',
       'location_unavailable':
           'Unable to get location. Please enable location services.',
       'refresh': 'Refresh',
@@ -295,6 +308,9 @@ class AppStrings {
           'Please select at least one tasbeeh to enable',
       'ok': 'OK',
       'cancel': 'Cancel',
+      'test_reminder': 'Test Reminder Now',
+      'reminder_enabled_success': 'Reminder enabled successfully. Next reminder will appear within the set interval.',
+      'location_settings_desc': 'Location service is off. Please enable GPS to continue.',
     },
   };
 

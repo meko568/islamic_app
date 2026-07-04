@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/reminder_scheduler_service.dart';
 
 // Overlay entry point - runs in separate Flutter engine
 @pragma('vm:entry-point')
 void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const TasbeehOverlayApp());
 }
 
@@ -29,12 +32,26 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
   @override
   void initState() {
     super.initState();
+    _loadInitialData();
     // Listen for data shared from the main app
     FlutterOverlayWindow.overlayListener.listen((data) {
       if (data != null) {
         _updateFromData(data);
       }
     });
+  }
+
+  Future<void> _loadInitialData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final dataJson = prefs.getString('current_overlay_data');
+      if (dataJson != null) {
+        final data = jsonDecode(dataJson);
+        _updateFromData(data);
+      }
+    } catch (e) {
+      // Ignore
+    }
   }
 
   void _updateFromData(dynamic data) {
@@ -44,8 +61,8 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
         _targetCount = data['targetCount'] ?? 100;
         _allowCloseAnytime = data['allowCloseAnytime'] ?? false;
         _lang = data['lang'] ?? 'ar';
-        _currentCount = 0;
-        _isCompleted = false;
+        // Only reset count if text changes
+        // This prevents resetting if data is re-shared
       });
     }
   }

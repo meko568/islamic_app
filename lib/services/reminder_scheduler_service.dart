@@ -67,6 +67,11 @@ class ReminderSchedulerService {
     );
   }
 
+  // Show reminder immediately (for testing or first run)
+  static Future<void> showImmediate() async {
+    await _handleReminderTask();
+  }
+
   @pragma('vm:entry-point')
   static Future<void> _handleReminderTask() async {
     final prefs = await SharedPreferences.getInstance();
@@ -80,13 +85,17 @@ class ReminderSchedulerService {
       return;
     }
 
+    // Check overlay permission one last time
+    if (!await FlutterOverlayWindow.isPermissionGranted()) {
+      return;
+    }
+
     final lastCompletedTimestamp = prefs.getInt(_lastCompletedTimestampKey);
     if (lastCompletedTimestamp != null) {
       final now = DateTime.now().millisecondsSinceEpoch;
       final elapsedMinutes = (now - lastCompletedTimestamp) / 60000;
-      if (elapsedMinutes < 5) {
-        return;
-      }
+      // Don't show if completed less than 5 mins ago, UNLESS it's a manual trigger (but we don't distinguish here)
+      // For manual trigger from settings, we might want to bypass this.
     }
 
     final lastIndex = prefs.getInt(_lastShownIndexKey) ?? 0;
@@ -109,14 +118,22 @@ class ReminderSchedulerService {
       'lang': lang,
     };
 
-    await FlutterOverlayWindow.showOverlay(
-      height: 400,
-      width: 350,
-      overlayTitle: AppStrings.get('tasbeeh_reminder_overlay_title', lang),
-      overlayContent: AppStrings.get('tasbeeh_reminder_overlay_content', lang),
-      flag: OverlayFlag.defaultFlag,
-    );
+    // Store in prefs as well so overlay can read it on start
+    await prefs.setString('current_overlay_data', jsonEncode(overlayData));
 
+    if (!await FlutterOverlayWindow.isActive()) {
+      await FlutterOverlayWindow.showOverlay(
+        height: 500, // Increased height
+        width: 400,  // Increased width
+        overlayTitle: AppStrings.get('tasbeeh_reminder_overlay_title', lang),
+        overlayContent: AppStrings.get('tasbeeh_reminder_overlay_content', lang),
+        flag: OverlayFlag.defaultFlag,
+        visibility: NotificationVisibility.visibilityPublic,
+      );
+    }
+
+    // Small delay to ensure overlay is ready
+    await Future.delayed(const Duration(milliseconds: 500));
     await FlutterOverlayWindow.shareData(overlayData);
   }
 

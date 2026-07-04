@@ -42,6 +42,8 @@ class _QuranScreenState extends State<QuranScreen> {
   final Map<int, List<Ayah>> _pageCache = {};
   final Map<int, bool> _pageExists = {};
   List<Surah> _allSurahs = [];
+  List<Ayah> _allAyahs = [];
+  final Map<int, GlobalKey> _surahKeys = {};
 
   @override
   void initState() {
@@ -132,27 +134,20 @@ class _QuranScreenState extends State<QuranScreen> {
   }
 
   void _onAdaptiveScrollChanged() {
-    if (!_adaptiveScrollController.hasClients) return;
+    if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return;
 
-    // Get all ayahs sorted
-    final allAyahs = <Ayah>[];
-    for (final pageAyahs in _pageCache.values) {
-      allAyahs.addAll(pageAyahs);
-    }
-    allAyahs.sort((a, b) => a.number.compareTo(b.number));
-
-    // Find which ayah is currently visible (assuming ~100px per ayah)
     final scrollPosition = _adaptiveScrollController.offset;
-    final approximateAyahIndex = (scrollPosition / 100.0).floor();
+    // Estimate based on ~250px per item
+    int approximateAyahIndex = (scrollPosition / 250.0).floor().clamp(0, _allAyahs.length - 1);
 
-    if (approximateAyahIndex >= 0 && approximateAyahIndex < allAyahs.length) {
-      final visibleAyah = allAyahs[approximateAyahIndex];
+    if (approximateAyahIndex >= 0 && approximateAyahIndex < _allAyahs.length) {
+      final visibleAyah = _allAyahs[approximateAyahIndex];
 
       // Find the surah for this ayah
-      final surah =
-          _allSurahs.where((s) {
-            return s.ayahs?.any((a) => a.number == visibleAyah.number) ?? false;
-          }).firstOrNull;
+      final surah = _allSurahs.firstWhere(
+        (s) => s.ayahs?.any((a) => a.number == visibleAyah.number) ?? false,
+        orElse: () => _allSurahs.first,
+      );
 
       final newPage = visibleAyah.page;
       // Save last page when it changes
@@ -160,9 +155,7 @@ class _QuranScreenState extends State<QuranScreen> {
         _saveLastPage(newPage);
       }
       setState(() {
-        if (surah != null) {
-          _currentSurahName = surah.nameArabic;
-        }
+        _currentSurahName = surah.nameArabic;
         _currentJuz = visibleAyah.juz;
         _currentPage = newPage;
       });
@@ -181,6 +174,7 @@ class _QuranScreenState extends State<QuranScreen> {
       }
       setState(() {
         _allSurahs = surahs;
+        _allAyahs = surahs.expand((s) => s.ayahs ?? <Ayah>[]).toList();
         _isLoading = false;
         if (surahs.isNotEmpty) _currentSurahName = surahs.first.nameArabic;
       });
@@ -302,6 +296,17 @@ class _QuranScreenState extends State<QuranScreen> {
           }
         } else {
           // Adaptive mode: scroll to ayah in list
+          if (ayahNumber == 1) {
+            final key = _surahKeys[surahNumber];
+            if (key?.currentContext != null) {
+              Scrollable.ensureVisible(
+                key!.currentContext!,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+              return;
+            }
+          }
           _scrollToAyahInAdaptive(ayah);
         }
       }
@@ -323,18 +328,11 @@ class _QuranScreenState extends State<QuranScreen> {
   }
 
   void _scrollToAyahInAdaptive(Ayah targetAyah) {
-    // Get all ayahs sorted
-    final allAyahs = <Ayah>[];
-    for (final pageAyahs in _pageCache.values) {
-      allAyahs.addAll(pageAyahs);
-    }
-    allAyahs.sort((a, b) => a.number.compareTo(b.number));
-
     // Find the index of the target ayah
-    final ayahIndex = allAyahs.indexWhere((a) => a.number == targetAyah.number);
+    final ayahIndex = _allAyahs.indexWhere((a) => a.number == targetAyah.number);
     if (ayahIndex >= 0) {
-      // Scroll to this ayah with some offset
-      final scrollPosition = ayahIndex * 100.0; // Approximate height per ayah
+      // Scroll to this ayah with improved offset
+      final scrollPosition = ayahIndex * 250.0;
       _adaptiveScrollController.animateTo(
         scrollPosition,
         duration: const Duration(milliseconds: 300),
@@ -367,11 +365,16 @@ class _QuranScreenState extends State<QuranScreen> {
   }
 
   Future<void> _navigateToJuz(int juzNumber) async {
-    for (final entry in _pageCache.entries) {
-      if (entry.value.any((a) => a.juz == juzNumber)) {
-        _navigateToPage(entry.key);
-        return;
-      }
+    final targetAyah = _allAyahs.firstWhere(
+      (a) => a.juz == juzNumber,
+      orElse: () => _allAyahs.first,
+    );
+
+    final settings = context.read<SettingsProvider>();
+    if (settings.quranLayoutMode == 'mushaf') {
+      _pageController.jumpToPage(targetAyah.page - 1);
+    } else {
+      _scrollToAyahInAdaptive(targetAyah);
     }
   }
 
@@ -514,20 +517,11 @@ class _QuranScreenState extends State<QuranScreen> {
     final ayahs = _pageCache[pageNumber];
     if (ayahs == null || ayahs.isEmpty) return;
 
-    // Find the index of the first ayah on this page in the sorted list
-    final allAyahs = <Ayah>[];
-    for (final pageAyahs in _pageCache.values) {
-      allAyahs.addAll(pageAyahs);
-    }
-    allAyahs.sort((a, b) => a.number.compareTo(b.number));
-
-    final firstAyahIndex = allAyahs.indexWhere(
+    final firstAyahIndex = _allAyahs.indexWhere(
       (a) => a.number == ayahs.first.number,
     );
     if (firstAyahIndex >= 0) {
-      // Scroll to this ayah with some offset
-      final scrollPosition =
-          firstAyahIndex * 100.0; // Approximate height per ayah
+      final scrollPosition = firstAyahIndex * 250.0;
       _adaptiveScrollController.animateTo(
         scrollPosition,
         duration: const Duration(milliseconds: 300),
@@ -537,25 +531,13 @@ class _QuranScreenState extends State<QuranScreen> {
   }
 
   void _jumpToPageFromAdaptive() {
-    // Get the currently visible item from the scroll controller
-    final scrollPosition =
-        _adaptiveScrollController.hasClients
-            ? _adaptiveScrollController.offset
-            : 0.0;
+    if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return;
+    
+    final scrollPosition = _adaptiveScrollController.offset;
+    final approximateAyahIndex = (scrollPosition / 250.0).floor().clamp(0, _allAyahs.length - 1);
 
-    // Approximate which ayah is visible (assuming ~100px per ayah)
-    final approximateAyahIndex = (scrollPosition / 100.0).floor();
-
-    // Get all ayahs sorted
-    final allAyahs = <Ayah>[];
-    for (final pageAyahs in _pageCache.values) {
-      allAyahs.addAll(pageAyahs);
-    }
-    allAyahs.sort((a, b) => a.number.compareTo(b.number));
-
-    if (approximateAyahIndex >= 0 && approximateAyahIndex < allAyahs.length) {
-      final visibleAyah = allAyahs[approximateAyahIndex];
-      // Jump to the page of this ayah
+    if (approximateAyahIndex >= 0 && approximateAyahIndex < _allAyahs.length) {
+      final visibleAyah = _allAyahs[approximateAyahIndex];
       _pageController.jumpToPage(visibleAyah.page - 1);
       setState(() {
         _currentPage = visibleAyah.page;
@@ -803,10 +785,10 @@ class _QuranScreenState extends State<QuranScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
+              const Icon(
                 Icons.phone_android_outlined,
                 size: 64,
-                color: const Color(0xFF8B6914),
+                color: Color(0xFF8B6914),
               ),
               const SizedBox(height: 16),
               Text(
@@ -833,10 +815,16 @@ class _QuranScreenState extends State<QuranScreen> {
       );
     }
 
-    // Use cached file existence check instead of sync existsSync
     final imagePath = '$_mushafImagesPath/page_$pageNumber.png';
     final imageFile = File(imagePath);
-    final pageExists = _pageExists[pageNumber] ?? false;
+    bool pageExists = _pageExists[pageNumber] ?? false;
+
+    // Double check file existence and size
+    if (pageExists && (!imageFile.existsSync() || imageFile.lengthSync() < 1000)) {
+      pageExists = false;
+      _pageExists[pageNumber] = false;
+    }
+
     if (!pageExists) {
       // Show download prompt if image not found
       return Center(
@@ -908,33 +896,65 @@ class _QuranScreenState extends State<QuranScreen> {
     // Display the image
     return Container(
       color: const Color(0xFFFFFEF5),
-      child: Image.file(imageFile, fit: BoxFit.contain),
+      child: Image.file(
+        imageFile,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.broken_image, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  AppStrings.get('error_loading_image', lang),
+                  style: GoogleFonts.cairo(),
+                ),
+                TextButton(
+                  onPressed: () {
+                    imageFile.delete().then((_) {
+                      setState(() => _pageExists[pageNumber] = false);
+                    });
+                  },
+                  child: Text(AppStrings.get('retry_download', lang)),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
   Widget _buildAdaptiveView(SettingsProvider settings, String lang) {
-    // Get all ayahs from cache, sorted by page and number
-    final allAyahs = <Ayah>[];
-    for (final pageAyahs in _pageCache.values) {
-      allAyahs.addAll(pageAyahs);
-    }
-    allAyahs.sort((a, b) => a.number.compareTo(b.number));
-
-    if (allAyahs.isEmpty) {
+    if (_allAyahs.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.info_outline, size: 64, color: Colors.grey),
+            const Icon(Icons.cloud_download_outlined, size: 64, color: Color(0xFF8B6914)),
             const SizedBox(height: 16),
             Text(
-              AppStrings.get('no_data_available', lang),
-              style: GoogleFonts.cairo(fontSize: 18),
+              AppStrings.get('quran_text_not_downloaded', lang),
+              style: GoogleFonts.amiri(fontSize: 20, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              AppStrings.get('tap_to_download_text', lang),
+              style: GoogleFonts.cairo(fontSize: 14, color: Colors.grey),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            ElevatedButton(
+            ElevatedButton.icon(
               onPressed: _loadQuran,
-              child: Text(AppStrings.get('retry', lang)),
+              icon: const Icon(Icons.download),
+              label: Text(AppStrings.get('download_now', lang)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B6914),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              ),
             ),
           ],
         ),
@@ -947,9 +967,9 @@ class _QuranScreenState extends State<QuranScreen> {
         ListView.builder(
           controller: _adaptiveScrollController,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          itemCount: allAyahs.length,
+          itemCount: _allAyahs.length,
           itemBuilder: (context, index) {
-            final ayah = allAyahs[index];
+            final ayah = _allAyahs[index];
             final isSurahStart = ayah.numberInSurah == 1;
 
             return Column(
@@ -957,7 +977,7 @@ class _QuranScreenState extends State<QuranScreen> {
               children: [
                 if (isSurahStart) _buildAdaptiveSurahHeader(ayah),
                 _buildAdaptiveAyahRow(ayah, settings),
-                if (index < allAyahs.length - 1) const SizedBox(height: 12),
+                if (index < _allAyahs.length - 1) const SizedBox(height: 12),
               ],
             );
           },
@@ -984,6 +1004,15 @@ class _QuranScreenState extends State<QuranScreen> {
                     fontFamily: 'UthmanicHafs',
                     fontSize: 12,
                     color: Color(0xFF8B6914),
+                  ),
+                ),
+                Text(
+                  '$_currentPage',
+                  style: const TextStyle(
+                    fontFamily: 'UthmanicHafs',
+                    fontSize: 13,
+                    color: Color(0xFF8B6914),
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
                 Text(
@@ -1020,6 +1049,7 @@ class _QuranScreenState extends State<QuranScreen> {
             ? '${AppStrings.get('surah_prefix', lang)} ${surah.nameArabic}'
             : '${AppStrings.get('surah_prefix', lang)} ${surah.nameEnglish}';
     return Container(
+      key: _surahKeys.putIfAbsent(surah.number, () => GlobalKey()),
       margin: const EdgeInsets.symmetric(vertical: 16),
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
       decoration: BoxDecoration(
