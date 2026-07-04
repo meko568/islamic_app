@@ -1,0 +1,50 @@
+name: islamic_app
+description: "A new Flutter project."
+publish_to: "none"
+version: 1.1.0+2
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.1.0
+  http: ^1.2.0
+  shared_preferences: ^2.2.2
+  path_provider: ^2.1.1
+  adhan: ^2.0.0
+  geolocator: ^10.1.0
+  intl: ^0.18.1
+  audioplayers: ^5.2.1
+  just_audio: ^0.9.36
+  provider: ^6.1.2
+  flutter_overlay_window: ^0.4.4
+  workmanager: ^0.9.0+3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.1
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: UthmanicHafs
+      fonts:
+        - asset: assets/fonts/UthmanicHafs1Ver18.ttf
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#0F5132"
+  adaptive_icon_foreground: "assets/icon/icon_fg.png"
+
+flutter_native_splash:
+  color: "#0F5132"
+  image: assets/icon/icon.png
+  android: true
+  ios: true
