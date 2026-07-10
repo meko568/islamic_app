@@ -8,25 +8,56 @@ import 'screens/azkar_detail_screen.dart';
 import 'screens/prayer_times_screen.dart';
 import 'screens/quran_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/tasbeeh_reminder_screen.dart';
 import 'models/azkar_model.dart';
 import 'theme/app_theme.dart';
 import 'providers/settings_provider.dart';
 import 'providers/reminder_provider.dart';
 import 'services/reminder_scheduler_service.dart';
 import 'overlay/tasbeeh_overlay_app.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   if (!kIsWeb) {
+    try {
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      
+      const InitializationSettings initializationSettings =
+          InitializationSettings(android: initializationSettingsAndroid);
+      
+      await flutterLocalNotificationsPlugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) async {
+          final String? payload = response.payload;
+          if (payload != null && navigatorKey.currentState != null) {
+            navigatorKey.currentState!.push(
+              MaterialPageRoute(
+                builder: (context) => TasbeehReminderScreen(tasbeehId: payload),
+              ),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('Error initializing notifications: $e');
+    }
+    
     await ReminderSchedulerService.initialize();
   }
   runApp(const IslamicApp());
 }
 
-// Ensure the overlay entry point is registered
 @pragma('vm:entry-point')
 void overlayMain() {
+  debugPrint('OVERLAY ENGINE STARTING...');
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const TasbeehOverlayApp());
 }
@@ -48,6 +79,7 @@ class IslamicApp extends StatelessWidget {
       child: Consumer<SettingsProvider>(
         builder: (context, settings, _) {
           return MaterialApp(
+            navigatorKey: navigatorKey,
             title: 'التطبيق الإسلامي',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme(settings.appFontSize),

@@ -226,13 +226,6 @@ class _TasbeehScreenState extends State<TasbeehScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(AppStrings.get('tasbeeh', lang)),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _showResetDialog,
-              tooltip: AppStrings.get('reset_counter', lang),
-            ),
-          ],
         ),
         body: Directionality(
           textDirection: TextDirection.rtl,
@@ -240,22 +233,22 @@ class _TasbeehScreenState extends State<TasbeehScreen> {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                // Phrase selector (wrap chips without scroll)
-                Wrap(
-                  spacing: 8.0,
-                  runSpacing: 8.0,
-                  children:
-                      _allPhrases.map((phrase) {
-                        final isCustom = _customPhrases.contains(phrase);
-                        return Row(
+                // Phrase selector (Horizontal scroll like flex)
+                SizedBox(
+                  height: 50,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: _allPhrases.map((phrase) {
+                      final isCustom = _customPhrases.contains(phrase);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             ChoiceChip(
                               label: Text(
                                 phrase,
                                 style: const TextStyle(fontSize: 12),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
                               ),
                               selected: _selectedPhrase == phrase,
                               onSelected: (selected) {
@@ -273,8 +266,10 @@ class _TasbeehScreenState extends State<TasbeehScreen> {
                                 constraints: const BoxConstraints(),
                               ),
                           ],
-                        );
-                      }).toList(),
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
 
                 const SizedBox(height: 16),
@@ -385,6 +380,19 @@ class _TasbeehScreenState extends State<TasbeehScreen> {
                 Text(
                   AppStrings.get('tap_to_count', lang),
                   style: const TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Reset button moved from navbar
+                OutlinedButton.icon(
+                  onPressed: _showResetDialog,
+                  icon: const Icon(Icons.refresh),
+                  label: Text(AppStrings.get('reset_counter', lang)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                    side: BorderSide(color: Theme.of(context).colorScheme.error),
+                  ),
                 ),
               ],
             ),

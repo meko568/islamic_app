@@ -16,6 +16,8 @@ dependencies:
   adhan: ^2.0.0
   geolocator: ^10.1.0
   intl: ^0.18.1
+  permission_handler: ^11.3.1
+  flutter_local_notifications: ^17.2.2
   audioplayers: ^5.2.1
   just_audio: ^0.9.36
   provider: ^6.1.2
@@ -40,7 +42,7 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/images/logo.png"
-  adaptive_icon_background: "#0F5132"
+  adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/images/logo.png"
   android_round: true
   web:

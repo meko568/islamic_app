@@ -86,10 +86,9 @@ class AzkarGroupedDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lang = context.watch<SettingsProvider>().appLanguage;
-    final textDirection = lang == 'ar' ? TextDirection.rtl : TextDirection.ltr;
 
     return Directionality(
-      textDirection: textDirection,
+      textDirection: lang == 'ar' ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
         appBar: AppBar(
           title: Text(
@@ -120,10 +119,7 @@ class AzkarGroupedDetailScreen extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(18),
                   child: Column(
-                    crossAxisAlignment:
-                        lang == 'ar'
-                            ? CrossAxisAlignment.end
-                            : CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -132,10 +128,6 @@ class AzkarGroupedDetailScreen extends StatelessWidget {
                             child: Text(
                               categoryTitle,
                               style: Theme.of(context).textTheme.titleLarge,
-                              textAlign:
-                                  lang == 'ar'
-                                      ? TextAlign.right
-                                      : TextAlign.left,
                             ),
                           ),
                           Container(
@@ -166,14 +158,9 @@ class AzkarGroupedDetailScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
                       Column(
-                        crossAxisAlignment:
-                            lang == 'ar'
-                                ? CrossAxisAlignment.end
-                                : CrossAxisAlignment.start,
                         children:
                             category.items.map((item) {
                               return Container(
-                                width: double.infinity,
                                 margin: const EdgeInsets.only(bottom: 12),
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
@@ -184,13 +171,10 @@ class AzkarGroupedDetailScreen extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      lang == 'ar'
-                                          ? CrossAxisAlignment.end
-                                          : CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Directionality(
-                                      textDirection: textDirection,
+                                      textDirection: TextDirection.rtl,
                                       child: Text(
                                         item.zekr,
                                         style: GoogleFonts.amiri(
@@ -201,10 +185,6 @@ class AzkarGroupedDetailScreen extends StatelessWidget {
                                                 context,
                                               ).textTheme.bodyLarge?.color,
                                         ),
-                                        textAlign:
-                                            lang == 'ar'
-                                                ? TextAlign.right
-                                                : TextAlign.left,
                                       ),
                                     ),
                                     const SizedBox(height: 10),
@@ -212,10 +192,6 @@ class AzkarGroupedDetailScreen extends StatelessWidget {
                                       item.source,
                                       style:
                                           Theme.of(context).textTheme.bodySmall,
-                                      textAlign:
-                                          lang == 'ar'
-                                              ? TextAlign.right
-                                              : TextAlign.left,
                                     ),
                                   ],
                                 ),

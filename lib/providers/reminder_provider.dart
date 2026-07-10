@@ -51,7 +51,7 @@ class ReminderProvider extends ChangeNotifier {
     if (custom.isNotEmpty) {
       return custom['targetCount'] as int;
     }
-    return 100; // Default for presets
+    return 33; // Default for presets
   }
 
   Future<void> loadSettings() async {

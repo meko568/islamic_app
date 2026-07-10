@@ -14,8 +14,8 @@ class TasbeehOverlayApp extends StatefulWidget {
 }
 
 class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
-  String _tasbeehText = '';
-  int _targetCount = 100;
+  String _tasbeehText = '...';
+  int _targetCount = 33;
   int _currentCount = 0;
   bool _allowCloseAnytime = false;
   String _lang = 'ar';
@@ -28,6 +28,7 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
     _loadInitialData();
     // Listen for data shared from the main app
     FlutterOverlayWindow.overlayListener.listen((data) {
+      debugPrint('Overlay engine received data: $data');
       if (data != null) {
         _updateFromData(data);
       }
@@ -38,22 +39,23 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final dataJson = prefs.getString('current_overlay_data');
+      debugPrint('Overlay engine loading data from prefs: $dataJson');
       if (dataJson != null) {
         final data = jsonDecode(dataJson);
         _updateFromData(data);
       }
     } catch (e) {
-      // Ignore
+      debugPrint('Overlay engine error loading prefs: $e');
     }
   }
 
   void _updateFromData(dynamic data) {
-    if (data is Map<String, dynamic>) {
+    if (data is Map) {
       setState(() {
-        _tasbeehText = data['tasbeehText'] ?? '';
-        _targetCount = data['targetCount'] ?? 100;
-        _allowCloseAnytime = data['allowCloseAnytime'] ?? false;
-        _lang = data['lang'] ?? 'ar';
+        _tasbeehText = data['tasbeehText']?.toString() ?? '...';
+        _targetCount = int.tryParse(data['targetCount']?.toString() ?? '33') ?? 33;
+        _allowCloseAnytime = data['allowCloseAnytime'] == true;
+        _lang = data['lang']?.toString() ?? 'ar';
         _currentCount = 0;
         _isCompleted = false;
       });
@@ -104,70 +106,34 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
 
   @override
   Widget build(BuildContext context) {
-    if (_tasbeehText.isEmpty && !_isCompleted) {
-      return const MaterialApp(
-        home: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: Center(child: CircularProgressIndicator()),
-        ),
-      );
-    }
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0F5132),
-          brightness: Brightness.light,
-        ),
-      ),
-      home: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Center(
-          child: Container(
-            margin: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF8F0),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 20,
-                  spreadRadius: 5,
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                // Close button
-                if (_allowCloseAnytime)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: GestureDetector(
-                      onTap: _closeOverlay,
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.3),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.close,
-                          size: 18,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ),
+      home: Directionality(
+        textDirection: _lang == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+        child: Material(
+          color: Colors.transparent,
+          child: Stack(
+            children: [
+              Center(
+                child: Container(
+                  width: 320,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8F0),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: const Color(0xFF0F5132), width: 4),
                   ),
-
-                // Main content
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (_allowCloseAnytime)
+                        Align(
+                          alignment: Alignment.topRight,
+                          child: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.black),
+                            onPressed: _closeOverlay,
+                          ),
+                        ),
                       if (_isCompleted)
                         _buildCompletionView()
                       else
@@ -175,8 +141,8 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

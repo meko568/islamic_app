@@ -191,11 +191,7 @@ class _AzkarScreenState extends State<AzkarScreen> {
   }
 
   bool _isDuaSectionTitle(String title) {
-    final normalized = title.toLowerCase();
-    return normalized.contains('أدعية') ||
-        normalized.contains('ادعية') ||
-        normalized.contains('dua') ||
-        normalized.contains('duas');
+    return title.contains('أدعية') || title.contains('ادعية');
   }
 
   @override
@@ -438,169 +434,119 @@ class _AzkarScreenState extends State<AzkarScreen> {
                                   groupedSection.arabicName,
                                 );
 
-                                return InkWell(
-                                  onTap:
-                                      canOpenGroupedDetail
-                                          ? () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder:
-                                                    (context) =>
-                                                        AzkarGroupedDetailScreen(
-                                                          title: title,
-                                                          categories:
-                                                              groupedSection
-                                                                  .categories,
-                                                        ),
-                                              ),
-                                            );
-                                          }
-                                          : null,
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Card(
-                                    elevation: 2,
-                                    margin: const EdgeInsets.only(bottom: 16),
-                                    color:
-                                        canOpenGroupedDetail
-                                            ? null
-                                            : Colors.transparent,
-                                    shape: RoundedRectangleBorder(
+                                return Card(
+                                  elevation: 2,
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  child: Container(
+                                    decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(16),
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            AppColors.primaryLight.withValues(
-                                              alpha: 0.08,
-                                            ),
-                                            AppColors.accent.withValues(
-                                              alpha: 0.05,
-                                            ),
-                                          ],
-                                        ),
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          AppColors.primaryLight.withValues(
+                                            alpha: 0.08,
+                                          ),
+                                          AppColors.accent.withValues(
+                                            alpha: 0.05,
+                                          ),
+                                        ],
                                       ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 20,
-                                          vertical: 16,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                Expanded(
-                                                  child: Row(
-                                                    children: [
-                                                      Container(
-                                                        width: 56,
-                                                        height: 56,
-                                                        decoration: BoxDecoration(
-                                                          shape:
-                                                              BoxShape.circle,
-                                                          gradient: LinearGradient(
-                                                            begin:
-                                                                Alignment
-                                                                    .topLeft,
-                                                            end:
-                                                                Alignment
-                                                                    .bottomRight,
-                                                            colors: [
-                                                              AppColors.primary
-                                                                  .withValues(
-                                                                    alpha: 0.9,
-                                                                  ),
-                                                              AppColors
-                                                                  .primaryLight
-                                                                  .withValues(
-                                                                    alpha: 0.7,
-                                                                  ),
-                                                            ],
-                                                          ),
-                                                          boxShadow: [
-                                                            BoxShadow(
-                                                              color: AppColors
-                                                                  .primary
-                                                                  .withValues(
-                                                                    alpha: 0.2,
-                                                                  ),
-                                                              blurRadius: 8,
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        child: const Center(
-                                                          child: Icon(
-                                                            Icons.menu_book,
-                                                            color: Colors.white,
-                                                            size: 28,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 16),
-                                                      Expanded(
-                                                        child: Text(
-                                                          title,
-                                                          style:
-                                                              Theme.of(context)
-                                                                  .textTheme
-                                                                  .titleLarge,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                if (canOpenGroupedDetail)
-                                                  Icon(
-                                                    Icons.arrow_forward_ios,
-                                                    size: 16,
-                                                    color: Colors.grey[400],
-                                                  ),
-                                              ],
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                        vertical: 16,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
                                             ),
-                                            const SizedBox(height: 10),
-                                            Container(
+                                            onTap:
+                                                canOpenGroupedDetail
+                                                    ? () {
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder:
+                                                              (
+                                                                context,
+                                                              ) => AzkarGroupedDetailScreen(
+                                                                title: title,
+                                                                categories:
+                                                                    groupedSection
+                                                                        .categories,
+                                                              ),
+                                                        ),
+                                                      );
+                                                    }
+                                                    : null,
+                                            child: Padding(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 4,
+                                                    vertical: 8,
                                                   ),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.accent
-                                                    .withValues(alpha: 0.2),
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                              ),
-                                              child: Text(
-                                                AppStrings.get(
-                                                  'items_count',
-                                                  lang,
-                                                  params: {
-                                                    'count':
-                                                        totalCount.toString(),
-                                                    'plural':
-                                                        totalCount == 1
-                                                            ? ''
-                                                            : 's',
-                                                  },
-                                                ),
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: AppColors.accent,
-                                                ),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      title,
+                                                      style:
+                                                          Theme.of(context)
+                                                              .textTheme
+                                                              .titleLarge,
+                                                    ),
+                                                  ),
+                                                  if (canOpenGroupedDetail)
+                                                    Icon(
+                                                      Icons.arrow_forward_ios,
+                                                      size: 16,
+                                                      color: Colors.grey[400],
+                                                    ),
+                                                ],
                                               ),
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.accent
+                                                  .withValues(alpha: 0.2),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              AppStrings.get(
+                                                'items_count',
+                                                lang,
+                                                params: {
+                                                  'count':
+                                                      totalCount.toString(),
+                                                  'plural':
+                                                      totalCount == 1
+                                                          ? ''
+                                                          : 's',
+                                                },
+                                              ),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.accent,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
