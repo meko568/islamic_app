@@ -20,14 +20,13 @@ void callbackDispatcher() {
     WidgetsFlutterBinding.ensureInitialized();
     
     // Handle both periodic and one-off tasks
-    if (task == _tasbeehReminderTaskName || task == _tasbeehOneOffTaskName) {
-      await ReminderSchedulerService._handleReminderTask();
-      
-      // If it's a one-off task, we need to schedule the next one manually
-      // to support intervals less than 15 minutes
-      if (task == _tasbeehOneOffTaskName) {
+    if (task == _tasbeehReminderTaskName || task.startsWith(_tasbeehOneOffTaskName)) {
+      // Robustness: Schedule next one immediately before handling current one
+      if (task.startsWith(_tasbeehOneOffTaskName)) {
         await ReminderSchedulerService.scheduleNextOneOff();
       }
+      
+      await ReminderSchedulerService._handleReminderTask();
     }
     return Future.value(true);
   });
@@ -45,7 +44,6 @@ class ReminderSchedulerService {
   }
 
   static Future<void> rescheduleAll() async {
-    // Cancel all existing tasks first
     await Workmanager().cancelAll();
 
     final prefs = await SharedPreferences.getInstance();
@@ -58,10 +56,8 @@ class ReminderSchedulerService {
     final interval = settings.intervalMinutes;
 
     if (interval < 15) {
-      // Use OneOffTask chain for intervals < 15 minutes (Android limitation)
       await scheduleNextOneOff();
     } else {
-      // Use PeriodicTask for 15+ minutes
       await Workmanager().registerPeriodicTask(
         _tasbeehReminderTaskName,
         _tasbeehReminderTaskName,
@@ -81,12 +77,12 @@ class ReminderSchedulerService {
 
     if (!settings.enabled || settings.selectedTasbeehIds.isEmpty) return;
 
-    // Schedule a one-off task that will trigger after the interval
+    // Use a fixed prefix with timestamp to ensure it schedules
     await Workmanager().registerOneOffTask(
-      "tasbeeh_oneoff_${DateTime.now().millisecondsSinceEpoch}",
+      "${_tasbeehOneOffTaskName}_${DateTime.now().millisecondsSinceEpoch}",
       _tasbeehOneOffTaskName,
       initialDelay: Duration(minutes: settings.intervalMinutes),
-      existingWorkPolicy: ExistingWorkPolicy.append, // Use append to not cancel current
+      existingWorkPolicy: ExistingWorkPolicy.append,
     );
   }
 
@@ -105,47 +101,9 @@ class ReminderSchedulerService {
       await prefs.setInt(_lastShownIndexKey, nextIndex);
 
       final tasbeehText = await _getTasbeehText(tasbeehId);
-      final targetCount = await _getTasbeehTargetCount(tasbeehId);
       final lang = prefs.getString('app_language') ?? 'ar';
 
-      final overlayData = {
-        'tasbeehId': tasbeehId,
-        'tasbeehText': tasbeehText,
-        'targetCount': targetCount,
-        'allowCloseAnytime': settings.allowCloseAnytime,
-        'lang': lang,
-      };
-
-      await prefs.setString('current_overlay_data', jsonEncode(overlayData));
-
-      bool overlayStarted = false;
-      try {
-        if (await FlutterOverlayWindow.isActive()) {
-          await FlutterOverlayWindow.closeOverlay();
-          await Future.delayed(const Duration(milliseconds: 500));
-        }
-
-        await FlutterOverlayWindow.showOverlay(
-          height: 600,
-          width: 500,
-          alignment: OverlayAlignment.center,
-          overlayTitle: AppStrings.get('tasbeeh_reminder_overlay_title', lang),
-          overlayContent: AppStrings.get('tasbeeh_reminder_overlay_content', lang),
-          flag: OverlayFlag.defaultFlag,
-        );
-
-        await Future.delayed(const Duration(milliseconds: 1000));
-        overlayStarted = await FlutterOverlayWindow.isActive();
-      } catch (_) {}
-
-      if (!overlayStarted) {
-        await _showHighPriorityNotification(tasbeehText, lang, tasbeehId);
-      } else {
-        for (int i = 0; i < 3; i++) {
-          await Future.delayed(Duration(milliseconds: 1000 + (i * 500)));
-          await FlutterOverlayWindow.shareData(overlayData);
-        }
-      }
+      await _showHighPriorityNotification(tasbeehText, lang, tasbeehId);
     } catch (e) {
       debugPrint('DEBUG ERROR: $e');
       rethrow;
@@ -168,47 +126,9 @@ class ReminderSchedulerService {
       await prefs.setInt(_lastShownIndexKey, nextIndex);
 
       final tasbeehText = await _getTasbeehText(tasbeehId);
-      final targetCount = await _getTasbeehTargetCount(tasbeehId);
       final lang = prefs.getString('app_language') ?? 'ar';
 
-      final overlayData = {
-        'tasbeehId': tasbeehId,
-        'tasbeehText': tasbeehText,
-        'targetCount': targetCount,
-        'allowCloseAnytime': settings.allowCloseAnytime,
-        'lang': lang,
-      };
-
-      await prefs.setString('current_overlay_data', jsonEncode(overlayData));
-
-      bool overlayStarted = false;
-      try {
-        if (await FlutterOverlayWindow.isActive()) {
-          await FlutterOverlayWindow.closeOverlay();
-          await Future.delayed(const Duration(milliseconds: 500));
-        }
-
-        await FlutterOverlayWindow.showOverlay(
-          height: 600,
-          width: 500,
-          alignment: OverlayAlignment.center,
-          overlayTitle: AppStrings.get('tasbeeh_reminder_overlay_title', lang),
-          overlayContent: AppStrings.get('tasbeeh_reminder_overlay_content', lang),
-          flag: OverlayFlag.defaultFlag,
-        );
-        
-        await Future.delayed(const Duration(milliseconds: 1000));
-        overlayStarted = await FlutterOverlayWindow.isActive();
-      } catch (_) {}
-
-      if (!overlayStarted) {
-        await _showHighPriorityNotification(tasbeehText, lang, tasbeehId);
-      } else {
-        for (int i = 0; i < 3; i++) {
-          await Future.delayed(Duration(milliseconds: 1000 + (i * 500)));
-          await FlutterOverlayWindow.shareData(overlayData);
-        }
-      }
+      await _showHighPriorityNotification(tasbeehText, lang, tasbeehId);
     } catch (e) {
       debugPrint('Error handling reminder task: $e');
     }
@@ -230,8 +150,11 @@ class ReminderSchedulerService {
     const NotificationDetails platformChannelSpecifics =
         NotificationDetails(android: androidPlatformChannelSpecifics);
 
+    // Use a unique ID based on seconds to avoid replacing previous notifications too quickly
+    final int notificationId = DateTime.now().second + (DateTime.now().minute * 60);
+
     await flutterLocalNotificationsPlugin.show(
-      DateTime.now().millisecond, // Unique ID to allow multiple notifications
+      notificationId,
       AppStrings.get('tasbeeh_reminder_overlay_title', lang),
       text,
       platformChannelSpecifics,
@@ -274,7 +197,10 @@ class ReminderSchedulerService {
 
   static Future<void> markAsCompleted() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_lastCompletedTimestampKey, DateTime.now().millisecondsSinceEpoch);
+    await prefs.setInt(
+      _lastCompletedTimestampKey,
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   static Future<void> cancelAll() async {

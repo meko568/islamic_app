@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:adhan/adhan.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:hijri/hijri_calendar.dart';
 import '../services/prayer_service.dart';
 import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
@@ -310,6 +311,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
                     ),
                     style: const TextStyle(fontSize: 12),
                   ),
+                  const Spacer(),
+                  _buildHijriDate(lang),
                 ],
               ),
             ),
@@ -324,6 +327,19 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> {
           // Prayer list
           _buildPrayerList(lang),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHijriDate(String lang) {
+    HijriCalendar.setLocal(lang);
+    final hijri = HijriCalendar.now();
+    return Text(
+      '${hijri.hDay} ${hijri.longMonthName} ${hijri.hYear}',
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        fontFamily: 'Cairo',
       ),
     );
   }

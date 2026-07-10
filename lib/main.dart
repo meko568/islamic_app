@@ -36,16 +36,23 @@ Future<void> main() async {
       await flutterLocalNotificationsPlugin.initialize(
         initializationSettings,
         onDidReceiveNotificationResponse: (NotificationResponse response) async {
-          final String? payload = response.payload;
-          if (payload != null && navigatorKey.currentState != null) {
-            navigatorKey.currentState!.push(
-              MaterialPageRoute(
-                builder: (context) => TasbeehReminderScreen(tasbeehId: payload),
-              ),
-            );
-          }
+          _handleNotificationClick(response.payload);
         },
       );
+
+      // Handle notification if app was closed
+      final NotificationAppLaunchDetails? notificationAppLaunchDetails =
+          await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+      if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
+        final String? payload = notificationAppLaunchDetails?.notificationResponse?.payload;
+        if (payload != null) {
+          // Give the app a moment to load the first screen before pushing
+          Future.delayed(const Duration(seconds: 1), () {
+            _handleNotificationClick(payload);
+          });
+        }
+      }
+
     } catch (e) {
       debugPrint('Error initializing notifications: $e');
     }
@@ -53,6 +60,16 @@ Future<void> main() async {
     await ReminderSchedulerService.initialize();
   }
   runApp(const IslamicApp());
+}
+
+void _handleNotificationClick(String? payload) {
+  if (payload != null && navigatorKey.currentState != null) {
+    navigatorKey.currentState!.push(
+      MaterialPageRoute(
+        builder: (context) => TasbeehReminderScreen(tasbeehId: payload),
+      ),
+    );
+  }
 }
 
 @pragma('vm:entry-point')

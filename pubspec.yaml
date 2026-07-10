@@ -18,6 +18,7 @@ dependencies:
   intl: ^0.18.1
   permission_handler: ^11.3.1
   flutter_local_notifications: ^17.2.2
+  hijri: ^3.0.0
   audioplayers: ^5.2.1
   just_audio: ^0.9.36
   provider: ^6.1.2
