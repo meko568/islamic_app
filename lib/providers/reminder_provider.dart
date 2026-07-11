@@ -13,8 +13,10 @@ class ReminderProvider extends ChangeNotifier {
 
   List<Map<String, dynamic>> _customTasbeehList = [];
   Map<String, int> _customRepeatCounts = {};
+  bool _isLoaded = false;
 
   ReminderSettings get settings => _settings;
+  bool get isLoaded => _isLoaded;
 
   List<Map<String, dynamic>> get customTasbeehList => _customTasbeehList;
 
@@ -64,6 +66,7 @@ class ReminderProvider extends ChangeNotifier {
 
     await _loadCustomTasbeehList();
     await _loadCustomRepeatCounts();
+    _isLoaded = true;
     notifyListeners();
   }
 
@@ -98,6 +101,11 @@ class ReminderProvider extends ChangeNotifier {
 
   Future<void> setAllowCloseAnytime(bool allow) async {
     _settings = _settings.copyWith(allowCloseAnytime: allow);
+    await saveSettings();
+  }
+
+  Future<void> setAutoShowOverlay(bool auto) async {
+    _settings = _settings.copyWith(autoShowOverlay: auto);
     await saveSettings();
   }
 

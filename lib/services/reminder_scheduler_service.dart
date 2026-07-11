@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    hide NotificationVisibility;
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
 import '../l10n/app_strings.dart';
 import '../models/reminder_settings.dart';
@@ -18,14 +19,15 @@ const String _tasbeehOneOffTaskName = 'tasbeehOneOffTask';
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     WidgetsFlutterBinding.ensureInitialized();
-    
+
     // Handle both periodic and one-off tasks
-    if (task == _tasbeehReminderTaskName || task.startsWith(_tasbeehOneOffTaskName)) {
+    if (task == _tasbeehReminderTaskName ||
+        task.startsWith(_tasbeehOneOffTaskName)) {
       // Robustness: Schedule next one immediately before handling current one
       if (task.startsWith(_tasbeehOneOffTaskName)) {
         await ReminderSchedulerService.scheduleNextOneOff();
       }
-      
+
       await ReminderSchedulerService._handleReminderTask();
     }
     return Future.value(true);
@@ -126,15 +128,50 @@ class ReminderSchedulerService {
       await prefs.setInt(_lastShownIndexKey, nextIndex);
 
       final tasbeehText = await _getTasbeehText(tasbeehId);
+      final targetCount = await _getTasbeehTargetCount(tasbeehId);
       final lang = prefs.getString('app_language') ?? 'ar';
 
+      // 1. Show high-priority notification regardless (backup/standard)
       await _showHighPriorityNotification(tasbeehText, lang, tasbeehId);
+
+      // 2. Show overlay automatically if enabled and permission granted
+      if (settings.autoShowOverlay && !Platform.isIOS) {
+        final hasPermission = await FlutterOverlayWindow.isPermissionGranted();
+        if (hasPermission) {
+          // Prepare data for the overlay
+          final overlayData = {
+            'tasbeehText': tasbeehText,
+            'targetCount': targetCount,
+            'allowCloseAnytime': settings.allowCloseAnytime,
+            'lang': lang,
+          };
+
+          // Save to prefs as backup (initial state)
+          await prefs.setString('current_overlay_data', jsonEncode(overlayData));
+
+          // Try to show it
+          await FlutterOverlayWindow.showOverlay(
+            enableDrag: true,
+            overlayTitle: "Tasbeeh Reminder",
+            overlayContent: tasbeehText,
+            flag: OverlayFlag.defaultFlag,
+            visibility: NotificationVisibility.visibilityPublic,
+            positionGravity: PositionGravity.none,
+            height: WindowSize.matchParent,
+            width: WindowSize.matchParent,
+          );
+
+          // Also notify existing overlay if it's already open
+          await FlutterOverlayWindow.shareData(overlayData);
+        }
+      }
     } catch (e) {
       debugPrint('Error handling reminder task: $e');
     }
   }
 
-  static Future<void> _showHighPriorityNotification(String text, String lang, String tasbeehId) async {
+  static Future<void> _showHighPriorityNotification(
+      String text, String lang, String tasbeehId) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
       'tasbeeh_reminder_channel',
@@ -151,7 +188,8 @@ class ReminderSchedulerService {
         NotificationDetails(android: androidPlatformChannelSpecifics);
 
     // Use a unique ID based on seconds to avoid replacing previous notifications too quickly
-    final int notificationId = DateTime.now().second + (DateTime.now().minute * 60);
+    final int notificationId =
+        DateTime.now().second + (DateTime.now().minute * 60);
 
     await flutterLocalNotificationsPlugin.show(
       notificationId,
@@ -168,8 +206,10 @@ class ReminderSchedulerService {
     if (customListJson != null) {
       try {
         final decoded = jsonDecode(customListJson) as List<dynamic>;
-        final customList = decoded.map((item) => Map<String, dynamic>.from(item)).toList();
-        final custom = customList.firstWhere((t) => t['id'] == id, orElse: () => {});
+        final customList =
+            decoded.map((item) => Map<String, dynamic>.from(item)).toList();
+        final custom =
+            customList.firstWhere((t) => t['id'] == id, orElse: () => {});
         if (custom.isNotEmpty) return custom['text'] as String;
       } catch (e) {}
     }
@@ -180,15 +220,18 @@ class ReminderSchedulerService {
     final prefs = await SharedPreferences.getInstance();
     final customCountsJson = prefs.getString('custom_repeat_counts');
     if (customCountsJson != null) {
-      final customCounts = Map<String, dynamic>.from(jsonDecode(customCountsJson));
+      final customCounts =
+          Map<String, dynamic>.from(jsonDecode(customCountsJson));
       if (customCounts.containsKey(id)) return customCounts[id] as int;
     }
     final customListJson = prefs.getString('custom_tasbeeh_list');
     if (customListJson != null) {
       try {
         final decoded = jsonDecode(customListJson) as List<dynamic>;
-        final customList = decoded.map((item) => Map<String, dynamic>.from(item)).toList();
-        final custom = customList.firstWhere((t) => t['id'] == id, orElse: () => {});
+        final customList =
+            decoded.map((item) => Map<String, dynamic>.from(item)).toList();
+        final custom =
+            customList.firstWhere((t) => t['id'] == id, orElse: () => {});
         if (custom.isNotEmpty) return custom['targetCount'] as int;
       } catch (e) {}
     }

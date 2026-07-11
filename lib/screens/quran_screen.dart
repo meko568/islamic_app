@@ -41,9 +41,11 @@ class _QuranScreenState extends State<QuranScreen> {
   // ✅ FIX 1: Cache كل الآيات في الذاكرة — مفيش reload
   final Map<int, List<Ayah>> _pageCache = {};
   final Map<int, bool> _pageExists = {};
+  bool _mushafFullyDownloaded = false;
   List<Surah> _allSurahs = [];
   List<Ayah> _allAyahs = [];
   final Map<int, GlobalKey> _surahKeys = {};
+  final Map<int, GlobalKey> _ayahKeys = {};
 
   @override
   void initState() {
@@ -105,20 +107,45 @@ class _QuranScreenState extends State<QuranScreen> {
     if (kIsWeb) return;
     try {
       final appDocDir = await getApplicationDocumentsDirectory();
+      final mushafPath = '${appDocDir.path}/quran_pages';
+      
+      final prefs = await SharedPreferences.getInstance();
+      final isDownloaded = prefs.getBool('mushaf_fully_downloaded') ?? false;
+
       setState(() {
-        _mushafImagesPath = '${appDocDir.path}/quran_pages';
+        _mushafImagesPath = mushafPath;
+        _mushafFullyDownloaded = isDownloaded;
       });
+
       // Pre-check file existence for all pages
-      _checkPageExistence();
+      await _checkPageExistence();
     } catch (_) {}
   }
 
   Future<void> _checkPageExistence() async {
     if (_mushafImagesPath == null) return;
+    
+    // If flag is true, assume all exist for performance
+    if (_mushafFullyDownloaded) {
+      for (int i = 1; i <= 604; i++) {
+        _pageExists[i] = true;
+      }
+      return;
+    }
+
+    int existingCount = 0;
     for (int i = 1; i <= 604; i++) {
       final imagePath = '$_mushafImagesPath/page_$i.png';
       final imageFile = File(imagePath);
-      _pageExists[i] = await imageFile.exists();
+      final exists = await imageFile.exists();
+      _pageExists[i] = exists;
+      if (exists) existingCount++;
+    }
+
+    if (existingCount == 604) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('mushaf_fully_downloaded', true);
+      setState(() => _mushafFullyDownloaded = true);
     }
   }
 
@@ -137,8 +164,8 @@ class _QuranScreenState extends State<QuranScreen> {
     if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return;
 
     final scrollPosition = _adaptiveScrollController.offset;
-    // Estimate based on ~250px per item
-    int approximateAyahIndex = (scrollPosition / 250.0).floor().clamp(0, _allAyahs.length - 1);
+    // Estimate based on ~180px per item (more accurate for adaptive list)
+    int approximateAyahIndex = (scrollPosition / 180.0).floor().clamp(0, _allAyahs.length - 1);
 
     if (approximateAyahIndex >= 0 && approximateAyahIndex < _allAyahs.length) {
       final visibleAyah = _allAyahs[approximateAyahIndex];
@@ -296,17 +323,6 @@ class _QuranScreenState extends State<QuranScreen> {
           }
         } else {
           // Adaptive mode: scroll to ayah in list
-          if (ayahNumber == 1) {
-            final key = _surahKeys[surahNumber];
-            if (key?.currentContext != null) {
-              Scrollable.ensureVisible(
-                key!.currentContext!,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-              );
-              return;
-            }
-          }
           _scrollToAyahInAdaptive(ayah);
         }
       }
@@ -331,14 +347,74 @@ class _QuranScreenState extends State<QuranScreen> {
     // Find the index of the target ayah
     final ayahIndex = _allAyahs.indexWhere((a) => a.number == targetAyah.number);
     if (ayahIndex >= 0) {
-      // Scroll to this ayah with improved offset
-      final scrollPosition = ayahIndex * 250.0;
-      _adaptiveScrollController.animateTo(
-        scrollPosition,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      final isSurahStart = targetAyah.numberInSurah == 1;
+
+      // Get the correct key
+      GlobalKey? targetKey;
+      if (isSurahStart) {
+        final surah = _allSurahs.firstWhere(
+          (s) => s.ayahs?.any((a) => a.number == targetAyah.number) ?? false,
+          orElse: () => _allSurahs.first,
+        );
+        targetKey = _surahKeys[surah.number];
+      } else {
+        targetKey = _ayahKeys.putIfAbsent(targetAyah.number, () => GlobalKey());
+      }
+
+      if (targetKey?.currentContext != null) {
+        Scrollable.ensureVisible(
+          targetKey!.currentContext!,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        // Item not in context, jump to estimated position first
+        final estPos = _estimateScrollPosition(targetAyah.number);
+        if (_adaptiveScrollController.hasClients) {
+          _adaptiveScrollController.jumpTo(
+            estPos.clamp(
+              0.0,
+              _adaptiveScrollController.position.maxScrollExtent,
+            ),
+          );
+
+          // Wait for build, then ensure exact visibility
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (targetKey?.currentContext != null && mounted) {
+              Scrollable.ensureVisible(
+                targetKey!.currentContext!,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+              );
+            }
+          });
+        }
+      }
     }
+  }
+
+  double _estimateScrollPosition(int targetAyahNumber) {
+    if (_allAyahs.isEmpty) return 0.0;
+
+    final ayahIndex = _allAyahs.indexWhere((a) => a.number == targetAyahNumber);
+    if (ayahIndex == -1) return 0.0;
+
+    final settings = context.read<SettingsProvider>();
+    final hasTranslation = settings.quranTranslationLang != 'none';
+
+    // Better estimation based on font size
+    double avgAyahHeight =
+        settings.quranFontSize * (hasTranslation ? 5.2 : 3.2);
+    double headerHeight = 160.0;
+
+    int headersCount = 0;
+    for (int i = 0; i < ayahIndex; i++) {
+      if (_allAyahs[i].numberInSurah == 1) {
+        headersCount++;
+      }
+    }
+
+    return (ayahIndex * avgAyahHeight) + (headersCount * headerHeight);
   }
 
   void _navigateToPage(int pageNumber) {
@@ -516,25 +592,14 @@ class _QuranScreenState extends State<QuranScreen> {
   void _scrollToPageInAdaptive(int pageNumber) {
     final ayahs = _pageCache[pageNumber];
     if (ayahs == null || ayahs.isEmpty) return;
-
-    final firstAyahIndex = _allAyahs.indexWhere(
-      (a) => a.number == ayahs.first.number,
-    );
-    if (firstAyahIndex >= 0) {
-      final scrollPosition = firstAyahIndex * 250.0;
-      _adaptiveScrollController.animateTo(
-        scrollPosition,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    }
+    _scrollToAyahInAdaptive(ayahs.first);
   }
 
   void _jumpToPageFromAdaptive() {
     if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return;
     
     final scrollPosition = _adaptiveScrollController.offset;
-    final approximateAyahIndex = (scrollPosition / 250.0).floor().clamp(0, _allAyahs.length - 1);
+    final approximateAyahIndex = (scrollPosition / 180.0).floor().clamp(0, _allAyahs.length - 1);
 
     if (approximateAyahIndex >= 0 && approximateAyahIndex < _allAyahs.length) {
       final visibleAyah = _allAyahs[approximateAyahIndex];
@@ -741,7 +806,12 @@ class _QuranScreenState extends State<QuranScreen> {
 
     try {
       for (int i = 1; i <= 604; i++) {
-        if (_pageExists[i] == true) continue;
+        if (_pageExists[i] == true) {
+          setState(() {
+            _downloadProgress = i / 604;
+          });
+          continue;
+        }
         
         await QuranService.downloadPage(i, (progress) {});
         
@@ -750,6 +820,16 @@ class _QuranScreenState extends State<QuranScreen> {
           _pageExists[i] = true;
         });
       }
+      
+      // Final verification
+      await _checkPageExistence();
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('mushaf_fully_downloaded', true);
+      
+      setState(() {
+        _mushafFullyDownloaded = true;
+      });
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -819,10 +899,11 @@ class _QuranScreenState extends State<QuranScreen> {
     final imageFile = File(imagePath);
     bool pageExists = _pageExists[pageNumber] ?? false;
 
-    // Double check file existence and size
-    if (pageExists && (!imageFile.existsSync() || imageFile.lengthSync() < 1000)) {
+    // Fast path: if fully downloaded flag is set, skip heavy file checks
+    if (_mushafFullyDownloaded) {
+      pageExists = true;
+    } else if (pageExists && !kIsWeb && !imageFile.existsSync()) {
       pageExists = false;
-      _pageExists[pageNumber] = false;
     }
 
     if (!pageExists) {
@@ -1103,6 +1184,7 @@ class _QuranScreenState extends State<QuranScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Container(
+        key: _ayahKeys.putIfAbsent(ayah.number, () => GlobalKey()),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,

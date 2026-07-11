@@ -15,19 +15,12 @@ class TasbeehReminderScreen extends StatefulWidget {
 
 class _TasbeehReminderScreenState extends State<TasbeehReminderScreen> {
   int _currentCount = 0;
-  late int _targetCount;
-  late String _tasbeehText;
-
-  @override
-  void initState() {
-    super.initState();
-    final provider = context.read<ReminderProvider>();
-    _targetCount = provider.getTasbeehTargetCount(widget.tasbeehId);
-    _tasbeehText = provider.getTasbeehText(widget.tasbeehId);
-  }
+  int? _targetCount;
+  String? _tasbeehText;
 
   void _increment() {
-    if (_currentCount < _targetCount) {
+    if (_targetCount == null) return;
+    if (_currentCount < _targetCount!) {
       setState(() {
         _currentCount++;
       });
@@ -53,6 +46,19 @@ class _TasbeehReminderScreenState extends State<TasbeehReminderScreen> {
   @override
   Widget build(BuildContext context) {
     final lang = context.watch<SettingsProvider>().appLanguage;
+    final reminderProvider = context.watch<ReminderProvider>();
+
+    // Wait until settings are loaded
+    if (!reminderProvider.isLoaded) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Initialize values once loaded
+    _targetCount ??= reminderProvider.getTasbeehTargetCount(widget.tasbeehId);
+    _tasbeehText ??= reminderProvider.getTasbeehText(widget.tasbeehId);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(AppStrings.get('tasbeeh_reminder', lang), style: GoogleFonts.cairo()),
@@ -64,7 +70,7 @@ class _TasbeehReminderScreenState extends State<TasbeehReminderScreen> {
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: Text(
-                _tasbeehText,
+                _tasbeehText!,
                 style: GoogleFonts.cairo(fontSize: 24, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),

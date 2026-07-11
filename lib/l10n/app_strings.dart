@@ -96,9 +96,11 @@ class AppStrings {
       'tap_to_count': 'اضغط على الدائرة للعد',
       'app_language': 'لغة التطبيق',
       'arabic_lang': 'العربية',
+      'arabic_explanation': 'التفسير الميسر',
       'quran_translation': 'ترجمة القرآن',
       'fonts': 'الخطوط',
       'quran_display': 'عرض القرآن',
+      'quran_settings': 'إعدادات القرآن',
       'reset_all': 'إعادة تعيين الكل',
       'total_items': 'العناصر الإجمالية',
       'completed': '{completed}/{total} مكتمل',
@@ -139,6 +141,8 @@ class AppStrings {
       'allow_close_anytime': 'السماح بإغلاق التذكير في أي وقت',
       'allow_close_anytime_desc':
           'عند التعطيل، لا يمكن إغلاق التذكير إلا بعد إكمال العدد',
+      'auto_show_overlay': 'ظهور التذكير تلقائياً (Pop-up)',
+      'auto_show_overlay_desc': 'عند التفعيل، سيظهر عداد التسبيح مباشرة على الشاشة فوق التطبيقات الأخرى',
       'overlay_permission_required': 'إذن التراكب مطلوب',
       'overlay_permission_desc':
           'لإظهار تذكير التسبيح فوق التطبيقات الأخرى، يرجى منح إذن "الظهور فوق التطبيقات الأخرى"',
@@ -152,6 +156,7 @@ class AppStrings {
       'test_reminder': 'تجربة التذكير الآن',
       'reminder_enabled_success': 'تم تفعيل التذكير بنجاح. سيظهر التذكير القادم خلال الفترة المحددة.',
       'location_settings_desc': 'خدمة الموقع مغلقة. يرجى تفعيل GPS للمتابعة.',
+      'honor_huawei_tip': 'مستخدمي هواتف Honor/Huawei: إذا لم يظهر التذكير التلقائي، يرجى ضبط "تشغيل التطبيق" يدوياً من إعدادات البطارية والتأكد من السماح بالظهور فوق التطبيقات الأخرى.',
     },
     'en': {
       'home': 'Home',
@@ -251,9 +256,11 @@ class AppStrings {
       'tap_to_count': 'Tap the circle to count',
       'app_language': 'App Language',
       'arabic_lang': 'Arabic',
+      'arabic_explanation': 'Arabic Tafsir',
       'quran_translation': 'Quran Translation',
       'fonts': 'Fonts',
       'quran_display': 'Quran Display',
+      'quran_settings': 'Quran Settings',
       'reset_all': 'Reset All',
       'total_items': 'Total Items',
       'completed': '{completed}/{total} Completed',
@@ -296,6 +303,8 @@ class AppStrings {
       'allow_close_anytime': 'Allow Closing Reminder Anytime',
       'allow_close_anytime_desc':
           'When disabled, reminder can only be closed after completing the count',
+      'auto_show_overlay': 'Automatic Pop-up Reminder',
+      'auto_show_overlay_desc': 'When enabled, the tasbeeh counter will appear directly over other apps',
       'overlay_permission_required': 'Overlay Permission Required',
       'overlay_permission_desc':
           'To show tasbeeh reminder over other apps, please grant "Display over other apps" permission',
@@ -311,6 +320,7 @@ class AppStrings {
       'test_reminder': 'Test Reminder Now',
       'reminder_enabled_success': 'Reminder enabled successfully. Next reminder will appear within the set interval.',
       'location_settings_desc': 'Location service is off. Please enable GPS to continue.',
+      'honor_huawei_tip': 'Honor/Huawei Users: If automatic reminders don\'t appear, please set "App Launch" to manual in Battery settings and ensure "Display over other apps" is allowed.',
     },
   };
 

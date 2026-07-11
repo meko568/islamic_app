@@ -5,12 +5,14 @@ class ReminderSettings {
   final int intervalMinutes;
   final List<String> selectedTasbeehIds;
   final bool allowCloseAnytime;
+  final bool autoShowOverlay;
 
   ReminderSettings({
     this.enabled = false,
     this.intervalMinutes = 60,
     this.selectedTasbeehIds = const [],
     this.allowCloseAnytime = false,
+    this.autoShowOverlay = true,
   });
 
   ReminderSettings copyWith({
@@ -18,12 +20,14 @@ class ReminderSettings {
     int? intervalMinutes,
     List<String>? selectedTasbeehIds,
     bool? allowCloseAnytime,
+    bool? autoShowOverlay,
   }) {
     return ReminderSettings(
       enabled: enabled ?? this.enabled,
       intervalMinutes: intervalMinutes ?? this.intervalMinutes,
       selectedTasbeehIds: selectedTasbeehIds ?? this.selectedTasbeehIds,
       allowCloseAnytime: allowCloseAnytime ?? this.allowCloseAnytime,
+      autoShowOverlay: autoShowOverlay ?? this.autoShowOverlay,
     );
   }
 
@@ -33,6 +37,7 @@ class ReminderSettings {
       'intervalMinutes': intervalMinutes,
       'selectedTasbeehIds': selectedTasbeehIds,
       'allowCloseAnytime': allowCloseAnytime,
+      'autoShowOverlay': autoShowOverlay,
     };
   }
 
@@ -55,6 +60,7 @@ class ReminderSettings {
       intervalMinutes: map['intervalMinutes'] as int? ?? 60,
       selectedTasbeehIds: selectedTasbeehIds,
       allowCloseAnytime: map['allowCloseAnytime'] as bool? ?? false,
+      autoShowOverlay: map['autoShowOverlay'] as bool? ?? true,
     );
   }
 
