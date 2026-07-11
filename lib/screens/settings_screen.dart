@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import '../providers/settings_provider.dart';
 import '../providers/reminder_provider.dart';
 import '../services/reminder_scheduler_service.dart';
@@ -19,6 +20,30 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _isHonorHuawei = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkDeviceType();
+  }
+
+  Future<void> _checkDeviceType() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      final androidInfo = await deviceInfo.androidInfo;
+      final manufacturer = androidInfo.manufacturer.toLowerCase();
+      if (manufacturer.contains('honor') ||
+          manufacturer.contains('huawei') ||
+          manufacturer.contains('oppo') ||
+          manufacturer.contains('vivo') ||
+          manufacturer.contains('xiaomi')) {
+        setState(() => _isHonorHuawei = true);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _clearAzkarCache() async {
     final lang = context.read<SettingsProvider>().appLanguage;
     try {
@@ -243,7 +268,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await reminderProvider.setAutoShowOverlay(value);
             },
           ),
-          if (settings.enabled && !kIsWeb && Platform.isAndroid)
+          if (settings.enabled && _isHonorHuawei)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Container(

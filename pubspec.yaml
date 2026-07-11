@@ -24,6 +24,7 @@ dependencies:
   provider: ^6.1.2
   flutter_overlay_window: ^0.4.4
   workmanager: ^0.9.0+3
+  device_info_plus: ^13.2.0
 
 dev_dependencies:
   flutter_test:
