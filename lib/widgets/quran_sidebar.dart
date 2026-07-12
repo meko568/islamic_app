@@ -311,7 +311,7 @@ class _QuranSidebarState extends State<QuranSidebar>
             onChanged: (value) {
               setState(() {
                 _selectedSurahNumber = value;
-                _selectedAyahNumber = null;
+                _selectedAyahNumber = 1; // Default to Ayah 1
               });
             },
           ),
@@ -353,7 +353,7 @@ class _QuranSidebarState extends State<QuranSidebar>
                   ),
                 ),
               ),
-              initialValue: _selectedAyahNumber,
+              value: _selectedAyahNumber,
               items: List.generate(
                 QuranSidebar._surahAyahCount[_selectedSurahNumber] ?? 0,
                 (index) => DropdownMenuItem<int>(
@@ -377,14 +377,14 @@ class _QuranSidebarState extends State<QuranSidebar>
             ),
           ),
         // Go button
-        if (_selectedSurahNumber != null && _selectedAyahNumber != null)
+        if (_selectedSurahNumber != null)
           Container(
             padding: const EdgeInsets.all(16),
             child: ElevatedButton(
               onPressed: () {
                 widget.onNavigateToAyah(
                   _selectedSurahNumber!,
-                  _selectedAyahNumber!,
+                  _selectedAyahNumber ?? 1,
                 );
                 Navigator.pop(context);
               },

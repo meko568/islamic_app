@@ -34,6 +34,7 @@ class _QuranScreenState extends State<QuranScreen> {
   String? _mushafImagesPath;
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
+  int? _bookmarkedPage;
 
   final Map<int, String> _translationCache = {};
   bool _translationLoading = false;
@@ -56,6 +57,47 @@ class _QuranScreenState extends State<QuranScreen> {
     _pageController.addListener(_onPageChanged);
     _adaptiveScrollController.addListener(_onAdaptiveScrollChanged);
     _getMushafImagesPath();
+    _loadBookmark();
+  }
+
+  Future<void> _loadBookmark() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _bookmarkedPage = prefs.getInt('bookmarked_page');
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _saveBookmark() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('bookmarked_page', _currentPage);
+      setState(() {
+        _bookmarkedPage = _currentPage;
+      });
+      if (mounted) {
+        final lang = context.read<SettingsProvider>().appLanguage;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppStrings.get('bookmark_saved', lang, params: {'page': _currentPage.toString()})),
+            duration: const Duration(seconds: 2),
+            backgroundColor: const Color(0xFF8B6914),
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  void _goToBookmark() {
+    if (_bookmarkedPage != null) {
+      _navigateToPage(_bookmarkedPage!);
+    } else {
+      final lang = context.read<SettingsProvider>().appLanguage;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStrings.get('no_bookmark', lang))),
+      );
+    }
   }
 
   Future<void> _loadEnglishTranslation(int surahNumber) async {
@@ -133,7 +175,7 @@ class _QuranScreenState extends State<QuranScreen> {
       final exists = await imageFile.exists();
       if (exists) {
         final size = await imageFile.length();
-        if (size > 1000) {
+        if (size > 5000) {
           _pageExists[i] = true;
           existingCount++;
         } else {
@@ -172,8 +214,10 @@ class _QuranScreenState extends State<QuranScreen> {
     final settings = context.read<SettingsProvider>();
     final hasTranslation = settings.quranTranslationLang != 'none';
 
-    // Improved estimation for current ayah/page tracking
-    double avgHeight = settings.quranFontSize * (hasTranslation ? 9.0 : 5.0);
+    // Sync with _estimateScrollPosition factors for consistency
+    double ayahTextFactor = 1.2;
+    double avgHeight = settings.quranFontSize * (hasTranslation ? 8.0 : 4.5) * ayahTextFactor;
+
     int approximateAyahIndex = (scrollPosition / avgHeight).floor().clamp(0, _allAyahs.length - 1);
 
     if (approximateAyahIndex >= 0 && approximateAyahIndex < _allAyahs.length) {
@@ -211,6 +255,15 @@ class _QuranScreenState extends State<QuranScreen> {
       setState(() {
         _allSurahs = surahs;
         _allAyahs = surahs.expand((s) => s.ayahs ?? <Ayah>[]).toList();
+        
+        // ✅ Pre-initialize keys for EVERY ayah to ensure stable IDs for navigation
+        for (var ayah in _allAyahs) {
+          _ayahKeys[ayah.number] = GlobalKey(debugLabel: 'ayah_${ayah.number}');
+        }
+        for (var surah in _allSurahs) {
+          _surahKeys[surah.number] = GlobalKey(debugLabel: 'surah_${surah.number}');
+        }
+
         _isLoading = false;
         if (surahs.isNotEmpty) _currentSurahName = surahs.first.nameArabic;
       });
@@ -356,43 +409,58 @@ class _QuranScreenState extends State<QuranScreen> {
     if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return;
 
     final ayahIndex = _allAyahs.indexWhere((a) => a.number == targetAyah.number);
-    if (ayahIndex >= 0) {
-      final isSurahStart = targetAyah.numberInSurah == 1;
-      GlobalKey? targetKey;
+    if (ayahIndex < 0) return;
 
-      if (isSurahStart) {
-        final surah = _allSurahs.firstWhere(
-          (s) => s.ayahs?.any((a) => a.number == targetAyah.number) ?? false,
-          orElse: () => _allSurahs.first,
+    // 1. Update UI state immediately
+    final surah = _allSurahs.firstWhere(
+      (s) => s.ayahs?.any((a) => a.number == targetAyah.number) ?? false,
+      orElse: () => _allSurahs.first,
+    );
+
+    setState(() {
+      _currentPage = targetAyah.page;
+      _currentJuz = targetAyah.juz;
+      _currentSurahName = surah.nameArabic;
+    });
+
+    // 2. Exact navigation using the Ayah ID (GlobalKey)
+    // We jump to a rough estimate first so ListView starts building the target area
+    double estimate = _estimateScrollPosition(targetAyah.number);
+    _adaptiveScrollController.jumpTo(
+      estimate.clamp(0.0, _adaptiveScrollController.position.maxScrollExtent),
+    );
+
+    // 3. Repeatedly check for the key's context and snap to it precisely
+    int attempts = 0;
+    void snapToKey() {
+      if (!mounted) return;
+      
+      final key = (targetAyah.numberInSurah == 1) 
+          ? _surahKeys[surah.number] 
+          : _ayahKeys[targetAyah.number];
+      
+      if (key?.currentContext != null) {
+        Scrollable.ensureVisible(
+          key!.currentContext!,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          alignment: 0.1, // Put it near the top but not hidden by header
         );
-        targetKey = _surahKeys[surah.number];
-      } else {
-        targetKey = _ayahKeys.putIfAbsent(targetAyah.number, () => GlobalKey());
-      }
-
-      // 1. Calculate a high-precision estimate
-      final targetScrollPos = _estimateScrollPosition(targetAyah.number);
-
-      // 2. Perform a fast jump to the estimated position
-      _adaptiveScrollController.jumpTo(
-        targetScrollPos.clamp(
-          0.0,
-          _adaptiveScrollController.position.maxScrollExtent,
-        ),
-      );
-
-      // 3. Precise adjustment after build
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (targetKey?.currentContext != null) {
-          Scrollable.ensureVisible(
-            targetKey!.currentContext!,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
+      } else if (attempts < 15) {
+        attempts++;
+        // If not found, move the scroll slightly to force building more items
+        if (attempts % 3 == 0) {
+          double jumpDist = (attempts > 6) ? 800.0 : 400.0;
+          _adaptiveScrollController.jumpTo(
+            (estimate + jumpDist).clamp(0.0, _adaptiveScrollController.position.maxScrollExtent)
           );
         }
-      });
+        Future.delayed(const Duration(milliseconds: 60), snapToKey);
+      }
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => snapToKey());
+    _saveLastPage(targetAyah.page);
   }
 
   double _estimateScrollPosition(int targetAyahNumber) {
@@ -404,11 +472,10 @@ class _QuranScreenState extends State<QuranScreen> {
     final settings = context.read<SettingsProvider>();
     final hasTranslation = settings.quranTranslationLang != 'none';
 
-    // Precision values for estimation
-    // For font size 22: Arabic ~110px, Translation ~210px
-    double factor = hasTranslation ? 9.5 : 5.0;
-    double avgAyahHeight = settings.quranFontSize * factor;
-    double headerHeight = 160.0;
+    // Refined estimation factors
+    double ayahTextFactor = 1.2; // Extra height for text wrapping
+    double avgAyahHeight = settings.quranFontSize * (hasTranslation ? 8.0 : 4.5) * ayahTextFactor;
+    double headerHeight = 180.0;
 
     int headersCount = 0;
     for (int i = 0; i < ayahIndex; i++) {
@@ -417,12 +484,7 @@ class _QuranScreenState extends State<QuranScreen> {
       }
     }
 
-    // Baseline position
-    double pos = (ayahIndex * avgAyahHeight) + (headersCount * headerHeight);
-
-    // Adjust for very long surahs or specific parts if needed, 
-    // but a linear estimate with headers is usually sufficient for a jump
-    return pos;
+    return (ayahIndex * avgAyahHeight) + (headersCount * headerHeight);
   }
 
   void _navigateToPage(int pageNumber) {
@@ -653,6 +715,20 @@ class _QuranScreenState extends State<QuranScreen> {
           centerTitle: true,
           actions: [
             IconButton(
+              icon: Icon(
+                _bookmarkedPage == _currentPage ? Icons.bookmark : Icons.bookmark_border,
+                color: const Color(0xFF8B6914),
+              ),
+              onPressed: _saveBookmark,
+              tooltip: AppStrings.get('save_bookmark', lang),
+            ),
+            if (_bookmarkedPage != null)
+              IconButton(
+                icon: const Icon(Icons.bookmark_added, color: Color(0xFF8B6914)),
+                onPressed: _goToBookmark,
+                tooltip: AppStrings.get('go_to_bookmark', lang),
+              ),
+            IconButton(
               icon: const Icon(Icons.view_module, color: Color(0xFF8B6914)),
               onPressed: () => _showLayoutSwitcher(settings, lang),
               tooltip: AppStrings.get('change_display_mode', lang),
@@ -693,6 +769,41 @@ class _QuranScreenState extends State<QuranScreen> {
             child: Text(AppStrings.get('retry', lang)),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWebMessage(String lang) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFF8B6914).withValues(alpha: 0.3),
+            width: 2,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.phone_android_outlined, size: 64, color: Color(0xFF8B6914)),
+            const SizedBox(height: 16),
+            Text(
+              AppStrings.get('mushaf_only_mobile', lang),
+              style: GoogleFonts.amiri(fontSize: 20, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              AppStrings.get('use_adaptive_web', lang),
+              style: GoogleFonts.cairo(fontSize: 14, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -819,228 +930,241 @@ class _QuranScreenState extends State<QuranScreen> {
         await quranDir.create(recursive: true);
       }
 
+      int successfullyDownloaded = 0;
+      List<int> pagesToDownload = [];
+
+      // 1. Identify which pages are TRULY missing or broken
       for (int i = 1; i <= 604; i++) {
-        final imagePath = '${quranDir.path}/page_$i.png';
-        final imageFile = File(imagePath);
-        
-        // Only download if file doesn't exist or is too small (corrupted)
-        if (await imageFile.exists() && await imageFile.length() > 1000) {
+        final f = File('${quranDir.path}/page_$i.png');
+        bool isValid = false;
+        try {
+          if (f.existsSync()) {
+            final size = f.lengthSync();
+            // Reject files that are too small (likely error pages)
+            if (size > 30000) {
+              isValid = true;
+            } else {
+              // Delete broken file immediately to allow re-download
+              f.deleteSync();
+            }
+          }
+        } catch (_) {}
+
+        if (isValid) {
+          successfullyDownloaded++;
           _pageExists[i] = true;
-          setState(() {
-            _downloadProgress = i / 604;
-          });
-          continue;
+        } else {
+          _pageExists[i] = false;
+          pagesToDownload.add(i);
         }
-        
-        await QuranService.downloadPage(i, (progress) {});
-        
-        setState(() {
-          _downloadProgress = i / 604;
-          _pageExists[i] = true;
-        });
-      }
-      
-      // Verification
-      int existingCount = 0;
-      for (int i = 1; i <= 604; i++) {
-        final imagePath = '${quranDir.path}/page_$i.png';
-        if (await File(imagePath).exists()) existingCount++;
       }
 
-      if (existingCount == 604) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('mushaf_fully_downloaded', true);
-        setState(() {
-          _mushafFullyDownloaded = true;
-        });
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم تحميل المصحف بنجاح')),
-          );
-        }
+      setState(() {
+        _downloadProgress = successfullyDownloaded / 604;
+      });
+
+      if (pagesToDownload.isEmpty) {
+        _finishDownload(604);
+        return;
       }
+
+      // 2. Download missing pages
+      const int batchSize = 4; // Slightly smaller batch for stability
+      for (int i = 0; i < pagesToDownload.length; i += batchSize) {
+        if (!mounted || !_isDownloading) break;
+
+        final currentBatch = pagesToDownload.sublist(
+          i, 
+          (i + batchSize > pagesToDownload.length) ? pagesToDownload.length : i + batchSize
+        );
+
+        final List<Future<bool>> batchFutures = currentBatch.map((pageNum) {
+          return QuranService.downloadPage(pageNum, (_) {});
+        }).toList();
+
+        final List<bool> results = await Future.wait(batchFutures);
+        
+        bool anyNewSuccess = false;
+        for (int j = 0; j < results.length; j++) {
+          if (results[j]) {
+            successfullyDownloaded++;
+            _pageExists[currentBatch[j]] = true;
+            anyNewSuccess = true;
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _downloadProgress = (successfullyDownloaded / 604).clamp(0.0, 1.0);
+          });
+        }
+        
+        await Future.delayed(const Duration(milliseconds: 150));
+      }
+      
+      _finishDownload(successfullyDownloaded);
     } catch (e) {
+      debugPrint('Download error: $e');
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  Future<void> _finishDownload(int count) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (count == 604) {
+      await prefs.setBool('mushaf_fully_downloaded', true);
+      setState(() => _mushafFullyDownloaded = true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ أثناء التحميل: $e')),
+          const SnackBar(content: Text('تم تحميل المصحف بالكامل بنجاح')),
         );
       }
-    } finally {
-      setState(() => _isDownloading = false);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم تحميل $count صفحة من أصل 604. يمكنك المحاولة مرة أخرى لاحقاً.')),
+        );
+      }
     }
   }
 
   Widget _buildMushafImagePage(int pageNumber, String lang) {
     // Guard for web platform
     if (kIsWeb) {
-      return Center(
-        child: Container(
-          margin: const EdgeInsets.all(24),
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFF8B6914).withValues(alpha: 0.3),
-              width: 2,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.phone_android_outlined,
-                size: 64,
-                color: Color(0xFF8B6914),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                AppStrings.get('mushaf_only_mobile', lang),
-                style: GoogleFonts.amiri(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1A0A00),
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                AppStrings.get('use_adaptive_web', lang),
-                style: GoogleFonts.cairo(
-                  fontSize: 14,
-                  color: Colors.grey.withValues(alpha: 0.7),
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildWebMessage(lang);
+    }
+
+    if (_mushafImagesPath == null) {
+      return const Center(child: CircularProgressIndicator());
     }
 
     final imagePath = '$_mushafImagesPath/page_$pageNumber.png';
     final imageFile = File(imagePath);
-    bool pageExists = _pageExists[pageNumber] ?? false;
+    
+    // DIRECT CHECK: If file exists and isn't empty, SHOW IT. 
+    // We use a safe check here because lengthSync might be problematic if file is partially written
+    bool exists = false;
+    try {
+       exists = imageFile.existsSync() && imageFile.lengthSync() > 5000;
+    } catch (_) {}
 
-    // Fast path: if fully downloaded flag is set, skip heavy file checks
-    if (_mushafFullyDownloaded) {
-      if (kIsWeb) {
-        pageExists = true;
-      } else {
-        // Double check specific file exists even if flag is true, to catch deletions
-        if (!imageFile.existsSync()) {
-          pageExists = false;
-        } else {
-          pageExists = true;
-        }
-      }
-    } else if (pageExists && !kIsWeb && !imageFile.existsSync()) {
-      pageExists = false;
-    }
-
-    if (!pageExists) {
-      // Show download prompt if image not found
-      return Center(
-        child: GestureDetector(
-          onTap: _downloadMushaf,
-          child: Container(
-            margin: const EdgeInsets.all(24),
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFF8B6914).withValues(alpha: 0.3),
-                width: 2,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_isDownloading)
-                  Column(
-                    children: [
-                      CircularProgressIndicator(value: _downloadProgress),
-                      const SizedBox(height: 16),
-                      Text(
-                        'جاري التحميل... ${(_downloadProgress * 100).toStringAsFixed(1)}%',
-                        style: GoogleFonts.cairo(fontSize: 16),
-                      ),
-                    ],
-                  )
-                else
-                  Column(
-                    children: [
-                      Icon(
-                        Icons.download_outlined,
-                        size: 64,
-                        color: const Color(0xFF8B6914),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        AppStrings.get('tap_to_download_mushaf', lang),
-                        style: GoogleFonts.amiri(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF1A0A00),
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 8),
-                Text(
-                  AppStrings.get(
-                    'page_number',
-                    lang,
-                    params: {'page': pageNumber.toString()},
-                  ),
-                  style: GoogleFonts.cairo(
-                    fontSize: 14,
-                    color: Colors.grey.withValues(alpha: 0.7),
-                  ),
-                ),
-              ],
-            ),
-          ),
+    if (exists) {
+      return Container(
+        color: const Color(0xFFFFFEF5),
+        child: Image.file(
+          imageFile,
+          fit: BoxFit.contain,
+          // We use a key that includes the file size to force a reload if the file changes
+          key: ValueKey('page_${pageNumber}_${imageFile.lengthSync()}'),
+          errorBuilder: (context, error, stackTrace) => _buildRetryView(pageNumber, imageFile, lang),
         ),
       );
     }
 
-    // Display the image
-    return Container(
-      color: const Color(0xFFFFFEF5),
-      child: Image.file(
-        imageFile,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.broken_image, size: 64, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text(
-                  AppStrings.get('error_loading_image', lang),
-                  style: GoogleFonts.cairo(),
+    // If file doesn't exist, show download prompt
+    return _buildDownloadPrompt(pageNumber, lang);
+  }
+
+  Widget _buildDownloadPrompt(int pageNumber, String lang) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFF8B6914).withValues(alpha: 0.3),
+            width: 2,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_isDownloading)
+              Column(
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'جاري تحميل المصحف... ${(_downloadProgress * 100).toStringAsFixed(1)}%',
+                    style: GoogleFonts.cairo(fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'ستظهر الصفحة تلقائياً عند وصول التحميل إليها',
+                    style: GoogleFonts.cairo(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              )
+            else
+              GestureDetector(
+                onTap: _downloadMushaf,
+                child: Column(
+                  children: [
+                    const Icon(Icons.download_outlined, size: 64, color: Color(0xFF8B6914)),
+                    const SizedBox(height: 16),
+                    Text(
+                      AppStrings.get('tap_to_download_mushaf', lang),
+                      style: GoogleFonts.amiri(fontSize: 20, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
-                TextButton(
-                  onPressed: () async {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('mushaf_fully_downloaded', false);
-                    setState(() {
-                      _mushafFullyDownloaded = false;
-                      // Reset all page existence to force a full re-scan/re-download of missing parts
-                      _pageExists.clear();
-                    });
-                    _downloadMushaf();
-                  },
-                  child: Text(AppStrings.get('retry_download', lang)),
-                ),
-              ],
+              ),
+            const SizedBox(height: 8),
+            Text(
+              AppStrings.get('page_number', lang, params: {'page': pageNumber.toString()}),
+              style: GoogleFonts.cairo(fontSize: 14, color: Colors.grey),
             ),
-          );
-        },
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRetryView(int pageNumber, File file, String lang) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.broken_image, size: 64, color: Colors.grey),
+          const SizedBox(height: 16),
+          Text(AppStrings.get('error_loading_image', lang)),
+          const SizedBox(height: 8),
+          Text(
+            'حجم الملف: ${(file.lengthSync() / 1024).toStringAsFixed(1)} KB',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () async {
+              try {
+                // Clear from Flutter image cache
+                await FileImage(file).evict();
+                if (await file.exists()) await file.delete();
+                
+                setState(() {
+                  _pageExists[pageNumber] = false;
+                  _isDownloading = true; // Show loading immediately
+                });
+                
+                // Small delay to ensure disk is ready
+                await Future.delayed(const Duration(milliseconds: 300));
+                
+                _downloadMushaf();
+              } catch (e) {
+                debugPrint('Retry error: $e');
+              }
+            },
+            icon: const Icon(Icons.refresh),
+            label: Text(AppStrings.get('retry_download', lang)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B6914),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1086,7 +1210,6 @@ class _QuranScreenState extends State<QuranScreen> {
         ListView.builder(
           controller: _adaptiveScrollController,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          cacheExtent: 3000, // Pre-build items for smoother navigation
           itemCount: _allAyahs.length,
           itemBuilder: (context, index) {
             final ayah = _allAyahs[index];
@@ -1169,7 +1292,7 @@ class _QuranScreenState extends State<QuranScreen> {
             ? '${AppStrings.get('surah_prefix', lang)} ${surah.nameArabic}'
             : '${AppStrings.get('surah_prefix', lang)} ${surah.nameEnglish}';
     return Container(
-      key: _surahKeys.putIfAbsent(surah.number, () => GlobalKey()),
+      key: _surahKeys[surah.number],
       margin: const EdgeInsets.symmetric(vertical: 16),
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
       decoration: BoxDecoration(
@@ -1223,7 +1346,7 @@ class _QuranScreenState extends State<QuranScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Container(
-        key: _ayahKeys.putIfAbsent(ayah.number, () => GlobalKey()),
+        key: _ayahKeys[ayah.number],
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,

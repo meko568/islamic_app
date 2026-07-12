@@ -21,17 +21,18 @@ android {
 
     defaultConfig {
         applicationId = "com.islamic.app"
-        minSdk = flutter.minSdkVersion
+        minSdk = flutter.minSdkVersion // Minimum supported by most plugins
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = flutter.versionCode.toInt()
+        versionName = flutter.versionName
         multiDexEnabled = true
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
         }
     }

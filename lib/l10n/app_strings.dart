@@ -157,6 +157,10 @@ class AppStrings {
       'reminder_enabled_success': 'تم تفعيل التذكير بنجاح. سيظهر التذكير القادم خلال الفترة المحددة.',
       'location_settings_desc': 'خدمة الموقع مغلقة. يرجى تفعيل GPS للمتابعة.',
       'honor_huawei_tip': 'مستخدمي هواتف Honor/Huawei: إذا لم يظهر التذكير التلقائي، يرجى ضبط "تشغيل التطبيق" يدوياً من إعدادات البطارية والتأكد من السماح بالظهور فوق التطبيقات الأخرى.',
+      'save_bookmark': 'حفظ علامة',
+      'go_to_bookmark': 'انتقل للعلامة',
+      'bookmark_saved': 'تم حفظ العلامة في صفحة {page}',
+      'no_bookmark': 'لا توجد علامة محفوظة',
     },
     'en': {
       'home': 'Home',
@@ -321,6 +325,10 @@ class AppStrings {
       'reminder_enabled_success': 'Reminder enabled successfully. Next reminder will appear within the set interval.',
       'location_settings_desc': 'Location service is off. Please enable GPS to continue.',
       'honor_huawei_tip': 'Honor/Huawei Users: If automatic reminders don\'t appear, please set "App Launch" to manual in Battery settings and ensure "Display over other apps" is allowed.',
+      'save_bookmark': 'Save Bookmark',
+      'go_to_bookmark': 'Go to Bookmark',
+      'bookmark_saved': 'Bookmark saved at page {page}',
+      'no_bookmark': 'No bookmark saved',
     },
   };
 
