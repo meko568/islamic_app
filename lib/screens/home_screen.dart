@@ -5,6 +5,8 @@ import '../widgets/feature_card.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
+import '../providers/auth_provider.dart';
+import 'login_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -35,6 +37,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final lang = context.watch<SettingsProvider>().appLanguage;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final auth = context.watch<AuthProvider>();
 
     return Directionality(
       textDirection: lang == 'ar' ? TextDirection.rtl : TextDirection.ltr,
@@ -46,6 +49,43 @@ class HomeScreen extends StatelessWidget {
           ),
           centerTitle: true,
           actions: [
+            IconButton(
+              icon: Icon(
+                auth.isLoggedIn ? Icons.person : Icons.person_outline,
+              ),
+              tooltip: AppStrings.get('account', lang),
+              onPressed: () {
+                if (auth.isLoggedIn) {
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (sheetContext) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.email_outlined),
+                            title: Text(AppStrings.get('signed_in_as', lang)),
+                            subtitle: Text(auth.user?.email ?? ''),
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.logout),
+                            title: Text(AppStrings.get('logout', lang)),
+                            onTap: () {
+                              auth.signOut();
+                              Navigator.of(sheetContext).pop();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                } else {
+                  Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+                }
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.settings_outlined),
               onPressed: () {
@@ -120,6 +160,24 @@ class HomeScreen extends StatelessWidget {
                       gradient: _buildFeatureGradient(isDark),
                       onTap: () {
                         Navigator.pushNamed(context, '/prayer-times');
+                      },
+                    ),
+                    FeatureCard(
+                      title: AppStrings.get('daily_tracker', lang),
+                      icon: Icons.checklist_rtl,
+                      isActive: true,
+                      gradient: _buildFeatureGradient(isDark),
+                      onTap: () {
+                        Navigator.pushNamed(context, '/daily-tracker');
+                      },
+                    ),
+                    FeatureCard(
+                      title: AppStrings.get('targets', lang),
+                      icon: Icons.flag_outlined,
+                      isActive: true,
+                      gradient: _buildFeatureGradient(isDark),
+                      onTap: () {
+                        Navigator.pushNamed(context, '/targets');
                       },
                     ),
                   ],
