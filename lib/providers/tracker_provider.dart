@@ -17,6 +17,7 @@ class TrackerProvider extends ChangeNotifier {
   DailyRecord _record = DailyRecord(date: '');
   List<CustomTaskDef> _customTasks = [];
   bool _loading = true;
+  PrayerTimes? _prayerTimes;
 
   String get date => _date;
   DailyRecord get record => _record;
@@ -55,6 +56,7 @@ class TrackerProvider extends ChangeNotifier {
     _date = await TrackerStorageService.getCurrentTrackerDate();
     _record = await TrackerStorageService.loadRecord(_date);
     _customTasks = await TrackerStorageService.loadCustomTasks();
+    _prayerTimes = await TrackerStorageService.getTodayPrayerTimes();
     await _mergeAutoDetectedPrayers();
 
     _loading = false;
@@ -95,6 +97,16 @@ class TrackerProvider extends ChangeNotifier {
 
   bool isDone(String taskId) => _record.tasks[taskId]?.done ?? false;
   bool isAuto(String taskId) => _record.tasks[taskId]?.auto ?? false;
+
+  /// True when [taskId] is a prayer task whose scheduled time hasn't
+  /// arrived yet today - used to keep its checkbox disabled until then.
+  bool isPrayerLocked(String taskId) {
+    final prayer = _prayerTaskMap[taskId];
+    if (prayer == null || _prayerTimes == null) return false;
+    final time = _prayerTimes!.timeForPrayer(prayer);
+    if (time == null) return false;
+    return DateTime.now().isBefore(time);
+  }
 
   Future<void> toggleTask(String taskId) async {
     final current = _record.tasks[taskId]?.done ?? false;

@@ -50,6 +50,7 @@ class TargetProvider extends ChangeNotifier {
     required int goal,
     String unit = '',
     bool isPreset = false,
+    String? linkType,
   }) async {
     final target = IslamicTarget(
       id: _uuid.v4(),
@@ -59,6 +60,7 @@ class TargetProvider extends ChangeNotifier {
       unit: unit,
       periodKey: TargetStorageService.currentPeriodKey(period),
       isPreset: isPreset,
+      linkType: linkType,
     );
     _targets = [..._targets, target];
     await TargetStorageService.saveTargets(_targets);
@@ -87,6 +89,23 @@ class TargetProvider extends ChangeNotifier {
     await TargetStorageService.saveTargets(_targets);
     notifyListeners();
     _pushIfLoggedIn();
+  }
+
+  /// Called from the Tasbeeh screen on every tap: bumps every active target
+  /// linked to tasbeeh counting by [by] (default 1), capped at each goal.
+  Future<void> incrementAllByLinkType(String linkType, {int by = 1}) async {
+    bool changed = false;
+    for (final t in _targets) {
+      if (t.linkType == linkType && t.progress < t.goal) {
+        t.progress = (t.progress + by).clamp(0, t.goal);
+        changed = true;
+      }
+    }
+    if (changed) {
+      await TargetStorageService.saveTargets(_targets);
+      notifyListeners();
+      _pushIfLoggedIn();
+    }
   }
 
   void _pushIfLoggedIn() {

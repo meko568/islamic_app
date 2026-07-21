@@ -11,6 +11,10 @@ class IslamicTarget {
   /// provider can detect a new cycle started and reset progress to 0.
   String periodKey;
   final bool isPreset;
+  /// Optional deep-link: 'tasbeeh' auto-increments this target whenever the
+  /// user counts in the Tasbeeh screen; 'surah:<number>' opens that surah
+  /// in the Quran screen when the target card is tapped.
+  final String? linkType;
 
   IslamicTarget({
     required this.id,
@@ -21,6 +25,7 @@ class IslamicTarget {
     this.unit = '',
     required this.periodKey,
     this.isPreset = false,
+    this.linkType,
   });
 
   bool get isDone => progress >= goal;
@@ -34,6 +39,7 @@ class IslamicTarget {
     'unit': unit,
     'periodKey': periodKey,
     'isPreset': isPreset,
+    'linkType': linkType,
   };
 
   factory IslamicTarget.fromJson(Map<String, dynamic> j) => IslamicTarget(
@@ -48,6 +54,7 @@ class IslamicTarget {
     unit: j['unit'] as String? ?? '',
     periodKey: j['periodKey'] as String? ?? '',
     isPreset: j['isPreset'] as bool? ?? false,
+    linkType: j['linkType'] as String?,
   );
 
   /// Ready-made target suggestions shown when the user taps "add target".
@@ -59,24 +66,28 @@ class IslamicTarget {
         'period': TargetPeriod.daily,
         'goal': 1000,
         'unit': ar ? 'تسبيحة' : 'count',
+        'linkType': 'tasbeeh',
       },
       {
         'title': ar ? 'قراءة سورة الكهف' : 'Read Surah Al-Kahf',
         'period': TargetPeriod.weekly,
         'goal': 1,
         'unit': ar ? 'مرة' : 'time',
+        'linkType': 'surah:18',
       },
       {
         'title': ar ? 'قراءة سورة البقرة' : 'Read Surah Al-Baqarah',
         'period': TargetPeriod.weekly,
         'goal': 1,
         'unit': ar ? 'مرة' : 'time',
+        'linkType': 'surah:2',
       },
       {
         'title': ar ? 'ختم القرآن الكريم' : 'Complete the whole Quran',
         'period': TargetPeriod.monthly,
         'goal': 1,
         'unit': ar ? 'مرة' : 'time',
+        'linkType': 'surah:1',
       },
       {
         'title': ar ? 'صيام الاثنين والخميس' : 'Fast Monday & Thursday',

@@ -6,6 +6,8 @@ import '../providers/settings_provider.dart';
 import '../providers/target_provider.dart';
 import '../models/target_model.dart';
 import '../theme/app_theme.dart';
+import 'quran_screen.dart';
+import 'tasbeeh_screen.dart';
 
 class TargetsScreen extends StatelessWidget {
   const TargetsScreen({super.key});
@@ -63,6 +65,7 @@ class TargetsScreen extends StatelessWidget {
                           goal: p['goal'] as int,
                           unit: p['unit'] as String,
                           isPreset: true,
+                          linkType: p['linkType'] as String?,
                         );
                         Navigator.of(sheetContext).pop();
                       },
@@ -169,6 +172,25 @@ class TargetsScreen extends StatelessWidget {
     );
   }
 
+  void _openLinkedScreen(BuildContext context, IslamicTarget target) {
+    final link = target.linkType;
+    if (link == null) return;
+    if (link == 'tasbeeh') {
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => TasbeehScreen()));
+    } else if (link.startsWith('surah:')) {
+      final surahNumber = int.tryParse(link.split(':').last);
+      if (surahNumber != null) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => QuranScreen(initialSurahNumber: surahNumber),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final lang = context.watch<SettingsProvider>().appLanguage;
@@ -194,7 +216,12 @@ class TargetsScreen extends StatelessWidget {
                   final target = targetProvider.targets[index];
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
+                    child: InkWell(
+                      onTap: target.linkType == null
+                          ? null
+                          : () => _openLinkedScreen(context, target),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,6 +306,7 @@ class TargetsScreen extends StatelessWidget {
                         ],
                       ),
                     ),
+                  ),
                   );
                 },
               ),

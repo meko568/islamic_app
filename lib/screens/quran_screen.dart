@@ -16,7 +16,8 @@ import '../l10n/app_strings.dart';
 enum QuranLayoutMode { mushaf, adaptive }
 
 class QuranScreen extends StatefulWidget {
-  const QuranScreen({super.key});
+  final int? initialSurahNumber;
+  const QuranScreen({super.key, this.initialSurahNumber});
 
   @override
   State<QuranScreen> createState() => _QuranScreenState();
@@ -53,7 +54,11 @@ class _QuranScreenState extends State<QuranScreen> {
     super.initState();
     _pageController = PageController(initialPage: 0);
     _adaptiveScrollController = ScrollController();
-    _loadQuran();
+    _loadQuran().then((_) {
+      if (widget.initialSurahNumber != null && mounted) {
+        _navigateToAyah(widget.initialSurahNumber!, 1);
+      }
+    });
     _pageController.addListener(_onPageChanged);
     _adaptiveScrollController.addListener(_onAdaptiveScrollChanged);
     _getMushafImagesPath();

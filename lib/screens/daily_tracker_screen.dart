@@ -216,6 +216,9 @@ class _DailyTrackerScreenState extends State<DailyTrackerScreen>
                                 final task = tracker.allTasks[index];
                                 final done = tracker.isDone(task.id);
                                 final auto = tracker.isAuto(task.id);
+                                final locked = tracker.isPrayerLocked(
+                                  task.id,
+                                );
                                 return Card(
                                   margin: const EdgeInsets.symmetric(
                                     vertical: 6,
@@ -229,27 +232,44 @@ class _DailyTrackerScreenState extends State<DailyTrackerScreen>
                                           : AppColors.secondaryText,
                                     ),
                                     title: Text(task.title(lang)),
-                                    subtitle: auto && done
+                                    subtitle: locked
                                         ? Text(
                                             AppStrings.get(
-                                              'auto_detected',
+                                              'prayer_time_not_reached',
                                               lang,
                                             ),
                                             style: TextStyle(
-                                              color: AppColors.accentDark,
+                                              color: AppColors.secondaryText,
                                               fontSize: 11,
                                             ),
                                           )
-                                        : null,
+                                        : (auto && done
+                                              ? Text(
+                                                  AppStrings.get(
+                                                    'auto_detected',
+                                                    lang,
+                                                  ),
+                                                  style: TextStyle(
+                                                    color:
+                                                        AppColors.accentDark,
+                                                    fontSize: 11,
+                                                  ),
+                                                )
+                                              : null),
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Checkbox(
-                                          value: done,
-                                          onChanged: (_) => context
-                                              .read<TrackerProvider>()
-                                              .toggleTask(task.id),
-                                        ),
+                                        locked
+                                            ? const Icon(
+                                                Icons.lock_outline,
+                                                size: 20,
+                                              )
+                                            : Checkbox(
+                                                value: done,
+                                                onChanged: (_) => context
+                                                    .read<TrackerProvider>()
+                                                    .toggleTask(task.id),
+                                              ),
                                         if (!task.isPreset)
                                           IconButton(
                                             icon: const Icon(
@@ -262,9 +282,11 @@ class _DailyTrackerScreenState extends State<DailyTrackerScreen>
                                           ),
                                       ],
                                     ),
-                                    onTap: () => context
-                                        .read<TrackerProvider>()
-                                        .toggleTask(task.id),
+                                    onTap: locked
+                                        ? null
+                                        : () => context
+                                              .read<TrackerProvider>()
+                                              .toggleTask(task.id),
                                   ),
                                 );
                               },

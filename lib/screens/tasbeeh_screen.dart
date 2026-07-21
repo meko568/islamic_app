@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
+import '../providers/target_provider.dart';
 
 class TasbeehScreen extends StatefulWidget {
   const TasbeehScreen({super.key});
@@ -184,6 +185,7 @@ class _TasbeehScreenState extends State<TasbeehScreen> {
       _setRoundCounter(currentRound);
     });
     _saveCounters();
+    context.read<TargetProvider>().incrementAllByLinkType('tasbeeh');
   }
 
   void _showResetDialog() {

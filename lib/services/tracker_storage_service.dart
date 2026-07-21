@@ -16,15 +16,15 @@ class TrackerStorageService {
 
   static final DateFormat _fmt = DateFormat('yyyy-MM-dd');
 
-  /// Returns today's tracker-day date string, falling back to the plain
-  /// calendar day if location isn't available.
-  static Future<String> getCurrentTrackerDate() async {
-    final now = DateTime.now();
+  /// Fetches current position, falling back to the last known lat/lng
+  /// cached in prefs (so tracker features keep working without asking
+  /// for location every single time).
+  static Future<({double lat, double lng})?> _getCachedLocation() async {
     try {
       final position = await PrayerService.getCurrentLocation();
+      final prefs = await SharedPreferences.getInstance();
       double? lat = position?.latitude;
       double? lng = position?.longitude;
-      final prefs = await SharedPreferences.getInstance();
 
       if (lat != null && lng != null) {
         await prefs.setDouble(_lastKnownLatKey, lat);
@@ -33,23 +33,43 @@ class TrackerStorageService {
         lat = prefs.getDouble(_lastKnownLatKey);
         lng = prefs.getDouble(_lastKnownLngKey);
       }
+      if (lat != null && lng != null) return (lat: lat, lng: lng);
+    } catch (_) {}
+    return null;
+  }
 
-      if (lat != null && lng != null) {
-        final coordinates = Coordinates(lat, lng);
-        final params = CalculationMethod.egyptian.getParameters();
-        final prayerTimes = PrayerTimes(
-          coordinates,
-          DateComponents.from(now),
-          params,
-        );
-        final fajr = prayerTimes.timeForPrayer(Prayer.fajr);
-        if (fajr != null && now.isBefore(fajr)) {
-          return _fmt.format(now.subtract(const Duration(days: 1)));
-        }
-        return _fmt.format(now);
+  /// Returns today's PrayerTimes for the last known location, or null if
+  /// location isn't available yet - used to lock prayer checkboxes until
+  /// their time arrives.
+  static Future<PrayerTimes?> getTodayPrayerTimes() async {
+    final loc = await _getCachedLocation();
+    if (loc == null) return null;
+    final coordinates = Coordinates(loc.lat, loc.lng);
+    final params = CalculationMethod.egyptian.getParameters();
+    return PrayerTimes(
+      coordinates,
+      DateComponents.from(DateTime.now()),
+      params,
+    );
+  }
+
+  /// Returns today's tracker-day date string, falling back to the plain
+  /// calendar day if location isn't available.
+  static Future<String> getCurrentTrackerDate() async {
+    final now = DateTime.now();
+    final loc = await _getCachedLocation();
+    if (loc != null) {
+      final coordinates = Coordinates(loc.lat, loc.lng);
+      final params = CalculationMethod.egyptian.getParameters();
+      final prayerTimes = PrayerTimes(
+        coordinates,
+        DateComponents.from(now),
+        params,
+      );
+      final fajr = prayerTimes.timeForPrayer(Prayer.fajr);
+      if (fajr != null && now.isBefore(fajr)) {
+        return _fmt.format(now.subtract(const Duration(days: 1)));
       }
-    } catch (_) {
-      // Ignore and fall back to calendar day below.
     }
     return _fmt.format(now);
   }
