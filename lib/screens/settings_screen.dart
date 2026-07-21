@@ -10,7 +10,6 @@ import '../providers/settings_provider.dart';
 import '../providers/reminder_provider.dart';
 import '../services/reminder_scheduler_service.dart';
 import '../l10n/app_strings.dart';
-import '../data/azkar_data.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -42,22 +41,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         setState(() => _isHonorHuawei = true);
       }
     } catch (_) {}
-  }
-
-  Future<void> _clearAzkarCache() async {
-    final lang = context.read<SettingsProvider>().appLanguage;
-    try {
-      await AzkarData.clearCache();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppStrings.get('clear_azkar_cache', lang))),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
   }
 
   @override
@@ -180,18 +163,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _showTranslationSelectionDialog(context, lang, settings),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
-            _buildSectionCard(
-              context,
-              title: AppStrings.get('data_management', lang),
-              child: ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: Text(AppStrings.get('clear_azkar_cache', lang),
-                    style: GoogleFonts.cairo(
-                        fontSize: 16, fontWeight: FontWeight.w600)),
-                onTap: _clearAzkarCache,
-              ),
             ),
           ],
         ),

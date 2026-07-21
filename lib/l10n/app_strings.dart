@@ -178,7 +178,7 @@ class AppStrings {
       'guest_mode_warning':
           'بياناتك محفوظة على هذا الجهاز فقط. لو حذفت التطبيق أو غيرت جهازك هتفقدها. سجّل دخول لحفظها بشكل دائم.',
       'passwords_dont_match': 'كلمتا المرور غير متطابقتين',
-      'account': 'الحساب',
+      'password_too_short': 'كلمة المرور لازم تكون 6 حروف أو أرقام على الأقل',      'account': 'الحساب',
       'signed_in_as': 'مسجل الدخول باسم',
       'guest_account': 'حساب زائر',
       'auth_error_email_in_use': 'هذا البريد الإلكتروني مستخدم بالفعل',
@@ -200,7 +200,8 @@ class AppStrings {
       'delete_task': 'حذف المهمة',
       'day_starts_at_fajr': 'يبدأ اليوم مع أذان الفجر',
       'history': 'السجل',
-
+      'no_history_yet': 'لسه معندكش سجل، ابدأ تسجل مهامك اليومية',
+      'advice_title': 'نصيحة ليك',
       // Targets
       'targets': 'الأهداف',
       'my_targets': 'أهدافي',
@@ -222,6 +223,11 @@ class AppStrings {
       'delete': 'حذف',
       'edit': 'تعديل',
       'progress': 'التقدم',
+      'tafsir': 'التفسير',
+      'tafsir_load_failed': 'تعذر تحميل التفسير، تأكد من الاتصال بالإنترنت وحاول تاني',
+      'retry': 'إعادة المحاولة',
+      'lifetime_tasbeeh': 'إجمالي التسبيح',
+      'perfect_days': 'أيام مثالية',
     },
     'en': {
       'home': 'Home',
@@ -407,6 +413,7 @@ class AppStrings {
       'guest_mode_warning':
           'Your data is stored on this device only. If you uninstall the app or switch devices you will lose it. Log in to save it permanently.',
       'passwords_dont_match': "Passwords don't match",
+      'password_too_short': 'Password must be at least 6 characters',
       'account': 'Account',
       'signed_in_as': 'Signed in as',
       'guest_account': 'Guest account',
@@ -429,6 +436,8 @@ class AppStrings {
       'delete_task': 'Delete Task',
       'day_starts_at_fajr': 'The day starts at Fajr',
       'history': 'History',
+      'no_history_yet': "No history yet, start tracking your daily tasks",
+      'advice_title': 'Advice for you',
 
       // Targets
       'targets': 'Targets',
@@ -451,6 +460,12 @@ class AppStrings {
       'delete': 'Delete',
       'edit': 'Edit',
       'progress': 'Progress',
+      'tafsir': 'Tafsir',
+      'tafsir_load_failed':
+          "Couldn't load the tafsir, check your internet connection and try again",
+      'retry': 'Retry',
+      'lifetime_tasbeeh': 'Total Tasbeeh',
+      'perfect_days': 'Perfect Days',
     },
   };
 

@@ -2,6 +2,8 @@ import 'package:adhan/adhan.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../main.dart';
 
 class PrayerService {
   // Prayer names in Arabic
@@ -14,8 +16,82 @@ class PrayerService {
     Prayer.isha: 'العشاء',
   };
 
-  static String getArabicPrayerName(Prayer prayer) {
-    return _arabicPrayerNames[prayer] ?? prayer.name;
+  static String getEnglishPrayerName(Prayer prayer) {
+    switch (prayer) {
+      case Prayer.fajr:
+        return 'Fajr';
+      case Prayer.sunrise:
+        return 'Sunrise';
+      case Prayer.dhuhr:
+        return 'Dhuhr';
+      case Prayer.asr:
+        return 'Asr';
+      case Prayer.maghrib:
+        return 'Maghrib';
+      case Prayer.isha:
+        return 'Isha';
+      default:
+        return prayer.name;
+    }
+  }
+
+  /// Shows a normal (non-intrusive) notification when the next prayer is
+  /// within ~10 minutes and the previous prayer hasn't been marked as
+  /// prayed yet. Meant to be called once when the app is opened. Only
+  /// fires once per prayer per day to avoid repeat spam.
+  static Future<void> checkAndNotifyIfPrayerApproaching(String lang) async {
+    try {
+      final position = await getCurrentLocation();
+      if (position == null) return;
+
+      final prayerTimes = calculatePrayerTimes(
+        position.latitude,
+        position.longitude,
+      );
+      final secondsUntilNext = getTimeUntilNextPrayer(prayerTimes);
+      if (secondsUntilNext <= 0 || secondsUntilNext > 600) return;
+
+      final lastPrayer = getCurrentPrayer(prayerTimes);
+      if (lastPrayer == Prayer.sunrise) return;
+      if (await isPrayerChecked(lastPrayer)) return;
+
+      final nextPrayer = getNextPrayer(prayerTimes);
+      if (nextPrayer == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final date = getTodayDateString();
+      final notifiedKey =
+          'prayer_approach_notified_${lastPrayer.name}_$date';
+      if (prefs.getBool(notifiedKey) ?? false) return;
+      await prefs.setBool(notifiedKey, true);
+
+      final lastName = lang == 'ar'
+          ? getArabicPrayerName(lastPrayer)
+          : getEnglishPrayerName(lastPrayer);
+      final nextName = lang == 'ar'
+          ? getArabicPrayerName(nextPrayer)
+          : getEnglishPrayerName(nextPrayer);
+
+      const androidDetails = AndroidNotificationDetails(
+        'prayer_reminder_channel',
+        'تذكير الصلاة',
+        channelDescription: 'تنبيه عند اقتراب دخول وقت صلاة جديدة',
+        importance: Importance.high,
+        priority: Priority.high,
+      );
+      const details = NotificationDetails(android: androidDetails);
+
+      await flutterLocalNotificationsPlugin.show(
+        9000 + nextPrayer.index,
+        lang == 'ar' ? 'تذكير صلاة' : 'Prayer Reminder',
+        lang == 'ar'
+            ? 'لسه ما صليتش $lastName، ووقت $nextName قرّب يدخل'
+            : "You haven't prayed $lastName yet, and $nextName is coming up soon",
+        details,
+      );
+    } catch (_) {
+      // Best-effort only - never let a notification failure affect the app.
+    }
   }
 
   // Format time to 12hr format with Arabic AM/PM

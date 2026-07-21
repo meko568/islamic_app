@@ -6,7 +6,7 @@ import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
 import '../providers/auth_provider.dart';
-import 'login_screen.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -54,37 +54,9 @@ class HomeScreen extends StatelessWidget {
                 auth.isLoggedIn ? Icons.person : Icons.person_outline,
               ),
               tooltip: AppStrings.get('account', lang),
-              onPressed: () {
-                if (auth.isLoggedIn) {
-                  showModalBottomSheet(
-                    context: context,
-                    builder: (sheetContext) => SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.email_outlined),
-                            title: Text(AppStrings.get('signed_in_as', lang)),
-                            subtitle: Text(auth.user?.email ?? ''),
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.logout),
-                            title: Text(AppStrings.get('logout', lang)),
-                            onTap: () {
-                              auth.signOut();
-                              Navigator.of(sheetContext).pop();
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                } else {
-                  Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
-                }
-              },
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.settings_outlined),

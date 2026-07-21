@@ -97,8 +97,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: const Icon(Icons.email_outlined),
                       border: const OutlineInputBorder(),
                     ),
-                    validator: (v) =>
-                        (v == null || !v.contains('@')) ? '' : null,
+                    validator: (v) => (v == null || !v.contains('@'))
+                        ? AppStrings.get('auth_error_invalid_email', lang)
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -109,8 +110,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: const Icon(Icons.lock_outline),
                       border: const OutlineInputBorder(),
                     ),
-                    validator: (v) =>
-                        (v == null || v.length < 6) ? '' : null,
+                    validator: (v) => (v == null || v.length < 6)
+                        ? AppStrings.get('password_too_short', lang)
+                        : null,
                   ),
                   Align(
                     alignment: lang == 'ar'

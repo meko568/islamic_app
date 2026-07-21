@@ -11,6 +11,9 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import '../l10n/app_strings.dart';
 import '../models/reminder_settings.dart';
 import '../main.dart';
+import 'prayer_service.dart';
+
+const String _prayerCheckTaskName = 'prayerApproachCheckTask';
 
 const String _tasbeehReminderTaskName = 'tasbeehReminderTask';
 const String _tasbeehOneOffTaskName = 'tasbeehOneOffTask';
@@ -29,6 +32,10 @@ void callbackDispatcher() {
       }
 
       await ReminderSchedulerService._handleReminderTask();
+    } else if (task == _prayerCheckTaskName) {
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('app_language') ?? 'ar';
+      await PrayerService.checkAndNotifyIfPrayerApproaching(lang);
     }
     return Future.value(true);
   });
@@ -45,8 +52,28 @@ class ReminderSchedulerService {
     await rescheduleAll();
   }
 
+  /// Runs independently of the Zekr/Tasbeeh reminder toggle: every ~15
+  /// minutes (Android's minimum periodic interval), checks whether the
+  /// next prayer is close and the previous one wasn't marked as prayed,
+  /// showing a normal system notification if so - works even if the app
+  /// is closed or the person is inside a completely different app.
+  static Future<void> schedulePrayerApproachChecks() async {
+    try {
+      await Workmanager().registerPeriodicTask(
+        _prayerCheckTaskName,
+        _prayerCheckTaskName,
+        frequency: const Duration(minutes: 15),
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+        constraints: Constraints(networkType: NetworkType.notRequired),
+      );
+    } catch (e) {
+      debugPrint('Could not schedule prayer approach checks: $e');
+    }
+  }
+
   static Future<void> rescheduleAll() async {
     await Workmanager().cancelAll();
+    await schedulePrayerApproachChecks();
 
     final prefs = await SharedPreferences.getInstance();
     final settingsJson = prefs.getString('reminder_settings');

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
 import '../providers/target_provider.dart';
+import '../services/stats_service.dart';
 
 class TasbeehScreen extends StatefulWidget {
   const TasbeehScreen({super.key});
@@ -186,6 +187,7 @@ class _TasbeehScreenState extends State<TasbeehScreen> {
     });
     _saveCounters();
     context.read<TargetProvider>().incrementAllByLinkType('tasbeeh');
+    StatsService.incrementLifetimeTasbeeh();
   }
 
   void _showResetDialog() {

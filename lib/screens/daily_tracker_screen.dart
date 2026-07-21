@@ -8,6 +8,7 @@ import '../providers/tracker_provider.dart';
 import '../models/daily_task_model.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
+import 'tracker_history_screen.dart';
 
 class DailyTrackerScreen extends StatefulWidget {
   const DailyTrackerScreen({super.key});
@@ -103,6 +104,13 @@ class _DailyTrackerScreenState extends State<DailyTrackerScreen>
         appBar: AppBar(
           title: Text(AppStrings.get('daily_tracker', lang)),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.bar_chart),
+              tooltip: AppStrings.get('history', lang),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TrackerHistoryScreen()),
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.add),
               onPressed: () => _showAddTaskDialog(context, lang),

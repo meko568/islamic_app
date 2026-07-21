@@ -108,6 +108,18 @@ class TrackerProvider extends ChangeNotifier {
     return DateTime.now().isBefore(time);
   }
 
+  /// Marks a task as done automatically from another screen (e.g. finishing
+  /// all of today's Morning/Evening Azkar). No-op if already done.
+  Future<void> markAutoDone(String taskId) async {
+    if (_record.tasks[taskId]?.done ?? false) return;
+    _record.tasks[taskId] = TaskCompletion(done: true, auto: true);
+    notifyListeners();
+    await TrackerStorageService.saveRecord(_record);
+    if (_uid != null) {
+      unawaited(_sync.pushTrackerRecord(_uid!, _record));
+    }
+  }
+
   Future<void> toggleTask(String taskId) async {
     final current = _record.tasks[taskId]?.done ?? false;
     _record.tasks[taskId] = TaskCompletion(done: !current, auto: false);

@@ -6,6 +6,7 @@ import '../widgets/azkar_item_card.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
+import '../providers/tracker_provider.dart';
 
 class AzkarDetailScreen extends StatefulWidget {
   final AzkarCategory category;
@@ -34,6 +35,19 @@ class _AzkarDetailScreenState extends State<AzkarDetailScreen> {
     setState(() {
       counters[azkarZekr] = newCount;
     });
+    _checkCategoryCompletion();
+  }
+
+  void _checkCategoryCompletion() {
+    if (getCompletedCount() != widget.category.items.length) return;
+    final taskId = switch (widget.category.name) {
+      'Morning' => 'morning_azkar',
+      'Evening' => 'evening_azkar',
+      _ => null,
+    };
+    if (taskId != null) {
+      context.read<TrackerProvider>().markAutoDone(taskId);
+    }
   }
 
   void resetCounter(String azkarZekr) {

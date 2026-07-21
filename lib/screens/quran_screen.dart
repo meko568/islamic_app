@@ -12,6 +12,7 @@ import '../services/quran_service.dart';
 import '../widgets/quran_sidebar.dart';
 import '../providers/settings_provider.dart';
 import '../l10n/app_strings.dart';
+import 'tafsir_screen.dart';
 
 enum QuranLayoutMode { mushaf, adaptive }
 
@@ -43,6 +44,9 @@ class _QuranScreenState extends State<QuranScreen> {
   // ✅ FIX 1: Cache كل الآيات في الذاكرة — مفيش reload
   final Map<int, List<Ayah>> _pageCache = {};
   final Map<int, bool> _pageExists = {};
+  final Map<int, int> _surahNumberForAyahNumber = {};
+  final Map<int, Surah> _surahByNumber = {};
+  final List<int> _headersBeforeIndex = [];
   bool _mushafFullyDownloaded = false;
   List<Surah> _allSurahs = [];
   List<Ayah> _allAyahs = [];
@@ -253,8 +257,10 @@ class _QuranScreenState extends State<QuranScreen> {
       // بناء الـ cache كله مرة واحدة
       for (final surah in surahs) {
         if (surah.ayahs == null) continue;
+        _surahByNumber[surah.number] = surah;
         for (final ayah in surah.ayahs!) {
           _pageCache.putIfAbsent(ayah.page, () => []).add(ayah);
+          _surahNumberForAyahNumber[ayah.number] = surah.number;
         }
       }
       setState(() {
@@ -267,6 +273,16 @@ class _QuranScreenState extends State<QuranScreen> {
         }
         for (var surah in _allSurahs) {
           _surahKeys[surah.number] = GlobalKey(debugLabel: 'surah_${surah.number}');
+        }
+
+        // Prefix-sum of surah headers before each index, so scroll-position
+        // estimation during navigation is O(1) instead of re-scanning
+        // everything on every jump.
+        _headersBeforeIndex.clear();
+        int headerCount = 0;
+        for (final a in _allAyahs) {
+          _headersBeforeIndex.add(headerCount);
+          if (a.numberInSurah == 1) headerCount++;
         }
 
         _isLoading = false;
@@ -417,10 +433,10 @@ class _QuranScreenState extends State<QuranScreen> {
     if (ayahIndex < 0) return;
 
     // 1. Update UI state immediately
-    final surah = _allSurahs.firstWhere(
-      (s) => s.ayahs?.any((a) => a.number == targetAyah.number) ?? false,
-      orElse: () => _allSurahs.first,
-    );
+    final surahNumber = _surahNumberForAyahNumber[targetAyah.number];
+    final surah = surahNumber == null
+        ? _allSurahs.first
+        : (_surahByNumber[surahNumber] ?? _allSurahs.first);
 
     setState(() {
       _currentPage = targetAyah.page;
@@ -482,12 +498,9 @@ class _QuranScreenState extends State<QuranScreen> {
     double avgAyahHeight = settings.quranFontSize * (hasTranslation ? 8.0 : 4.5) * ayahTextFactor;
     double headerHeight = 180.0;
 
-    int headersCount = 0;
-    for (int i = 0; i < ayahIndex; i++) {
-      if (_allAyahs[i].numberInSurah == 1) {
-        headersCount++;
-      }
-    }
+    int headersCount = ayahIndex < _headersBeforeIndex.length
+        ? _headersBeforeIndex[ayahIndex]
+        : 0;
 
     return (ayahIndex * avgAyahHeight) + (headersCount * headerHeight);
   }
@@ -733,6 +746,26 @@ class _QuranScreenState extends State<QuranScreen> {
                 onPressed: _goToBookmark,
                 tooltip: AppStrings.get('go_to_bookmark', lang),
               ),
+            IconButton(
+              icon: const Icon(Icons.menu_book_outlined, color: Color(0xFF8B6914)),
+              tooltip: AppStrings.get('tafsir', lang),
+              onPressed: () {
+                final ayahsOnPage = _pageCache[_currentPage];
+                if (ayahsOnPage == null || ayahsOnPage.isEmpty) return;
+                final firstAyah = ayahsOnPage.first;
+                final surahNumber = _surahNumberForAyahNumber[firstAyah.number];
+                if (surahNumber == null) return;
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => TafsirScreen(
+                      surahNumber: surahNumber,
+                      ayahNumber: firstAyah.numberInSurah,
+                      surahName: _surahByNumber[surahNumber]?.nameArabic,
+                    ),
+                  ),
+                );
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.view_module, color: Color(0xFF8B6914)),
               onPressed: () => _showLayoutSwitcher(settings, lang),
@@ -1216,17 +1249,21 @@ class _QuranScreenState extends State<QuranScreen> {
           controller: _adaptiveScrollController,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           itemCount: _allAyahs.length,
+          cacheExtent: 2000,
+          addAutomaticKeepAlives: false,
           itemBuilder: (context, index) {
             final ayah = _allAyahs[index];
             final isSurahStart = ayah.numberInSurah == 1;
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (isSurahStart) _buildAdaptiveSurahHeader(ayah),
-                _buildAdaptiveAyahRow(ayah, settings),
-                if (index < _allAyahs.length - 1) const SizedBox(height: 12),
-              ],
+            return RepaintBoundary(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (isSurahStart) _buildAdaptiveSurahHeader(ayah),
+                  _buildAdaptiveAyahRow(ayah, settings),
+                  if (index < _allAyahs.length - 1) const SizedBox(height: 12),
+                ],
+              ),
             );
           },
         ),
@@ -1282,14 +1319,9 @@ class _QuranScreenState extends State<QuranScreen> {
   Widget _buildAdaptiveSurahHeader(Ayah ayah) {
     final lang = context.watch<SettingsProvider>().appLanguage;
 
-    // Find the surah for this ayah
-    Surah? surah;
-    for (final s in _allSurahs) {
-      if (s.ayahs?.any((a) => a.number == ayah.number) ?? false) {
-        surah = s;
-        break;
-      }
-    }
+    // Find the surah for this ayah (O(1) via prebuilt index)
+    final surahNumber = _surahNumberForAyahNumber[ayah.number];
+    final surah = surahNumber == null ? null : _surahByNumber[surahNumber];
     if (surah == null) return const SizedBox.shrink();
 
     final title =
@@ -1430,6 +1462,34 @@ class _QuranScreenState extends State<QuranScreen> {
                                   : TextDirection.ltr,
                         ),
               ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () {
+                  final surahNumber = _surahNumberForAyahNumber[ayah.number];
+                  if (surahNumber == null) return;
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TafsirScreen(
+                        surahNumber: surahNumber,
+                        ayahNumber: ayah.numberInSurah,
+                        surahName: _surahByNumber[surahNumber]?.nameArabic,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.menu_book_outlined, size: 16),
+                label: Text(
+                  AppStrings.get('tafsir', lang),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(50, 30),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
           ],
         ),
       ),
