@@ -1,0 +1,27 @@
+diff a/lib/screens/azkar_detail_screen.dart b/lib/screens/azkar_detail_screen.dart	(rejected hunks)
+@@ -6,6 +6,7 @@ import '../widgets/azkar_item_card.dart';
+ import '../theme/app_theme.dart';
+ import '../l10n/app_strings.dart';
+ import '../providers/settings_provider.dart';
++import '../services/daily_tasks_service.dart';
+ 
+ class AzkarDetailScreen extends StatefulWidget {
+   final AzkarCategory category;
+@@ -34,6 +35,17 @@ class _AzkarDetailScreenState extends State<AzkarDetailScreen> {
+     setState(() {
+       counters[azkarZekr] = newCount;
+     });
++    _checkDailyTaskProgress();
++  }
++
++  void _checkDailyTaskProgress() {
++    final total = widget.category.items.length;
++    if (total == 0) return;
++    final completed = getCompletedCount();
++    DailyTasksService.markCategoryProgress(
++      widget.category.name,
++      completed / total,
++    );
+   }
+ 
+   void resetCounter(String azkarZekr) {

@@ -1,0 +1,9 @@
+diff a/lib/main.dart b/lib/main.dart	(rejected hunks)
+@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
+ import 'package:flutter/foundation.dart' show kIsWeb;
+ import 'package:islamic_app/screens/tasbeeh_screen.dart';
+ import 'screens/home_screen.dart';
++import 'screens/loading_screen.dart';
+ import 'screens/azkar_screen.dart';
+ import 'screens/azkar_detail_screen.dart';
+ import 'screens/prayer_times_screen.dart';

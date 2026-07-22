@@ -32,7 +32,6 @@ class _QuranScreenState extends State<QuranScreen> {
   int _currentPage = 1;
   String _currentSurahName = '';
   int _currentJuz = 1;
-  bool _showLastPageMessage = false;
   String? _mushafImagesPath;
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
@@ -52,6 +51,7 @@ class _QuranScreenState extends State<QuranScreen> {
   List<Ayah> _allAyahs = [];
   final Map<int, GlobalKey> _surahKeys = {};
   final Map<int, GlobalKey> _ayahKeys = {};
+  final GlobalKey _adaptiveListKey = GlobalKey();
 
   @override
   void initState() {
@@ -216,39 +216,84 @@ class _QuranScreenState extends State<QuranScreen> {
     }
   }
 
+  // Throttle guard so we don't run a render-tree walk on every scroll pixel.
+  bool _scrollCheckScheduled = false;
+
   void _onAdaptiveScrollChanged() {
     if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return;
+    if (_scrollCheckScheduled) return;
+    _scrollCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollCheckScheduled = false;
+      _updateCurrentPageFromRealPositions();
+    });
+  }
 
-    final scrollPosition = _adaptiveScrollController.offset;
-    final settings = context.read<SettingsProvider>();
-    final hasTranslation = settings.quranTranslationLang != 'none';
+  // Finds which ayah is actually nearest the top of the viewport using the
+  // real, already-laid-out RenderBox of each ayah's GlobalKey — no guessed
+  // per-item heights. Only ayahs currently built by the ListView have a
+  // non-null currentContext, so this scan is always cheap (bounded by
+  // whatever the ListView + cacheExtent currently has on screen).
+  int _lastVisibleAyahIndex = 0;
 
-    // Sync with _estimateScrollPosition factors for consistency
-    double ayahTextFactor = 1.2;
-    double avgHeight = settings.quranFontSize * (hasTranslation ? 8.0 : 4.5) * ayahTextFactor;
+  Ayah? _findTopVisibleAyah() {
+    if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return null;
+    final viewportBox =
+        _adaptiveListKey.currentContext?.findRenderObject() as RenderBox?;
+    if (viewportBox == null) return null;
 
-    int approximateAyahIndex = (scrollPosition / avgHeight).floor().clamp(0, _allAyahs.length - 1);
+    // Only the items near what the ListView currently has built will have a
+    // non-null context, so we widen the window until we find at least one,
+    // instead of paying for a full scan of every ayah every frame.
+    int window = 80;
+    while (window <= _allAyahs.length) {
+      final start = (_lastVisibleAyahIndex - window).clamp(0, _allAyahs.length - 1);
+      final end = (_lastVisibleAyahIndex + window).clamp(0, _allAyahs.length - 1);
 
-    if (approximateAyahIndex >= 0 && approximateAyahIndex < _allAyahs.length) {
-      final visibleAyah = _allAyahs[approximateAyahIndex];
-
-      // Find the surah for this ayah
-      final surah = _allSurahs.firstWhere(
-        (s) => s.ayahs?.any((a) => a.number == visibleAyah.number) ?? false,
-        orElse: () => _allSurahs.first,
-      );
-
-      final newPage = visibleAyah.page;
-      // Save last page when it changes
-      if (newPage != _currentPage) {
-        _saveLastPage(newPage);
+      Ayah? best;
+      int bestIndex = _lastVisibleAyahIndex;
+      double bestDy = double.infinity;
+      for (int i = start; i <= end; i++) {
+        final ayah = _allAyahs[i];
+        final ctx = _ayahKeys[ayah.number]?.currentContext;
+        if (ctx == null) continue;
+        final box = ctx.findRenderObject() as RenderBox?;
+        if (box == null || !box.attached) continue;
+        final dy = box.localToGlobal(Offset.zero, ancestor: viewportBox).dy;
+        final distance = dy.abs();
+        if (distance < bestDy) {
+          bestDy = distance;
+          best = ayah;
+          bestIndex = i;
+        }
       }
-      setState(() {
-        _currentSurahName = surah.nameArabic;
-        _currentJuz = visibleAyah.juz;
-        _currentPage = newPage;
-      });
+      if (best != null) {
+        _lastVisibleAyahIndex = bestIndex;
+        return best;
+      }
+      window *= 2;
     }
+    return null;
+  }
+
+  void _updateCurrentPageFromRealPositions() {
+    final visibleAyah = _findTopVisibleAyah();
+    if (visibleAyah == null || !mounted) return;
+
+    final surah = _allSurahs.firstWhere(
+      (s) => s.ayahs?.any((a) => a.number == visibleAyah.number) ?? false,
+      orElse: () => _allSurahs.first,
+    );
+
+    final newPage = visibleAyah.page;
+    if (newPage != _currentPage) {
+      _saveLastPage(newPage);
+    }
+    setState(() {
+      _currentSurahName = surah.nameArabic;
+      _currentJuz = visibleAyah.juz;
+      _currentPage = newPage;
+    });
   }
 
   Future<void> _loadQuran() async {
@@ -319,7 +364,6 @@ class _QuranScreenState extends State<QuranScreen> {
       if (lastPage != null && lastPage > 1) {
         setState(() {
           _currentPage = lastPage;
-          _showLastPageMessage = true;
         });
 
         final settings = context.read<SettingsProvider>();
@@ -684,19 +728,16 @@ class _QuranScreenState extends State<QuranScreen> {
   }
 
   void _jumpToPageFromAdaptive() {
-    if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return;
-    
-    final scrollPosition = _adaptiveScrollController.offset;
-    final approximateAyahIndex = (scrollPosition / 180.0).floor().clamp(0, _allAyahs.length - 1);
-
-    if (approximateAyahIndex >= 0 && approximateAyahIndex < _allAyahs.length) {
-      final visibleAyah = _allAyahs[approximateAyahIndex];
-      _pageController.jumpToPage(visibleAyah.page - 1);
-      setState(() {
-        _currentPage = visibleAyah.page;
-      });
-      _updatePageInfo(visibleAyah.page);
-    }
+    if (_allAyahs.isEmpty) return;
+    // Use the ayah we already found via real render positions while the
+    // user was scrolling (_lastVisibleAyahIndex), rather than a guessed
+    // pixel-per-item conversion.
+    final visibleAyah = _findTopVisibleAyah() ?? _allAyahs[_lastVisibleAyahIndex];
+    _pageController.jumpToPage(visibleAyah.page - 1);
+    setState(() {
+      _currentPage = visibleAyah.page;
+    });
+    _updatePageInfo(visibleAyah.page);
   }
 
   @override
@@ -902,53 +943,6 @@ class _QuranScreenState extends State<QuranScreen> {
             ),
           ),
         ),
-
-        // رسالة آخر صفحة
-        if (_showLastPageMessage)
-          Positioned(
-            top: 48,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 24),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF8B6914).withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      AppStrings.get(
-                        'continue_from_page',
-                        lang,
-                        params: {'page': _currentPage.toString()},
-                      ),
-                      style: const TextStyle(
-                        fontFamily: 'UthmanicHafs',
-                        fontSize: 15,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => setState(() => _showLastPageMessage = false),
-                      child: const Icon(
-                        Icons.close,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -1246,6 +1240,7 @@ class _QuranScreenState extends State<QuranScreen> {
       children: [
         // Scrollable list of ayahs
         ListView.builder(
+          key: _adaptiveListKey,
           controller: _adaptiveScrollController,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           itemCount: _allAyahs.length,

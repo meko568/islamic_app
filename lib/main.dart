@@ -157,7 +157,7 @@ class _AppView extends StatelessWidget {
             darkTheme: AppTheme.darkTheme(settings.appFontSize),
             themeMode: settings.themeMode,
             locale: Locale(settings.appLanguage),
-            home: const HomeScreen(),
+            home: settings.isLoading ? const LoadingScreen() : const HomeScreen(),
             routes: {
               '/home': (context) => const HomeScreen(),
               '/azkar': (context) => const AzkarScreen(),

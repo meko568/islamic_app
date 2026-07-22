@@ -19,6 +19,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _defaultQuranLayoutMode = 'adaptive';
 
   // Current values
+  bool _isLoading = true;
   ThemeMode _themeMode = _defaultThemeMode;
   String _appLanguage = _defaultAppLanguage;
   String _quranTranslationLang = _defaultQuranTranslationLang;
@@ -27,6 +28,7 @@ class SettingsProvider extends ChangeNotifier {
   String _quranLayoutMode = _defaultQuranLayoutMode;
 
   // Getters
+  bool get isLoading => _isLoading;
   ThemeMode get themeMode => _themeMode;
   String get appLanguage => _appLanguage;
   String get quranTranslationLang => _quranTranslationLang;
@@ -90,6 +92,7 @@ class SettingsProvider extends ChangeNotifier {
       _quranLayoutMode =
           prefs.getString(_quranLayoutModeKey) ?? _defaultQuranLayoutMode;
 
+      _isLoading = false;
       notifyListeners();
     } catch (e) {
       // If SharedPreferences fails for any reason, keep defaults and notify
@@ -100,6 +103,7 @@ class SettingsProvider extends ChangeNotifier {
       _appFontSize = _defaultAppFontSize;
       _quranFontSize = _defaultQuranFontSize;
       _quranLayoutMode = _defaultQuranLayoutMode;
+      _isLoading = false;
       notifyListeners();
     }
   }

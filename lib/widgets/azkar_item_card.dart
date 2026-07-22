@@ -26,25 +26,7 @@ class AzkarItemCard extends StatefulWidget {
   State<AzkarItemCard> createState() => _AzkarItemCardState();
 }
 
-class _AzkarItemCardState extends State<AzkarItemCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _tapController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tapController = AnimationController(
-      duration: const Duration(milliseconds: 150),
-      vsync: this,
-    );
-  }
-
-  @override
-  void dispose() {
-    _tapController.dispose();
-    super.dispose();
-  }
-
+class _AzkarItemCardState extends State<AzkarItemCard> {
   bool get isCompleted => widget.currentCount >= widget.azkarItem.repeat;
 
   double get progressPercent => widget.currentCount / widget.azkarItem.repeat;
@@ -72,7 +54,14 @@ class _AzkarItemCardState extends State<AzkarItemCard>
       elevation: 2,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       color: isCompleted ? Colors.grey.withValues(alpha: 0.3) : null,
-      child: Opacity(
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap:
+            widget.showCounter && !isCompleted
+                ? () => widget.onCountChange(widget.currentCount + 1)
+                : null,
+        child: Opacity(
         opacity: isCompleted ? 0.7 : 1.0,
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -246,86 +235,53 @@ class _AzkarItemCardState extends State<AzkarItemCard>
                     ),
                     const SizedBox(width: 16),
 
-                    // Tap counter button
-                    GestureDetector(
-                      onTapDown:
-                          isCompleted ? null : (_) => _tapController.forward(),
-                      onTapUp:
-                          isCompleted
-                              ? null
-                              : (_) {
-                                _tapController.reverse();
-                                widget.onCountChange(widget.currentCount + 1);
-                              },
-                      onTapCancel:
-                          isCompleted ? null : () => _tapController.reverse(),
-                      child: IgnorePointer(
-                        ignoring: isCompleted,
-                        child: ScaleTransition(
-                          scale: Tween<double>(begin: 1.0, end: 0.88).animate(
-                            CurvedAnimation(
-                              parent: _tapController,
-                              curve: Curves.easeInOut,
-                            ),
-                          ),
-                          child: Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors:
-                                    isCompleted
-                                        ? [
-                                          Colors.grey.withValues(alpha: 0.5),
-                                          Colors.grey.withValues(alpha: 0.3),
-                                        ]
-                                        : [
-                                          counterButtonColor.withValues(
-                                            alpha: 0.9,
-                                          ),
-                                          counterButtonColor.withValues(
-                                            alpha: 0.7,
-                                          ),
-                                        ],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color:
-                                      isCompleted
-                                          ? Colors.transparent
-                                          : counterButtonColor.withValues(
-                                            alpha: 0.3,
-                                          ),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (isCompleted)
-                                  const Icon(
-                                    Icons.check_circle,
-                                    color: Colors.white,
-                                    size: 28,
-                                  )
-                                else
-                                  Icon(
-                                    Icons.add,
-                                    color: Colors.white,
-                                    size: 32,
-                                  ),
-                                if (!isCompleted) ...[
-                                  const SizedBox(height: 2),
-                                ],
-                              ],
-                            ),
-                          ),
+                    // Decorative badge — tapping anywhere on the card
+                    // increments the counter now, this is display-only.
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors:
+                              isCompleted
+                                  ? [
+                                    Colors.grey.withValues(alpha: 0.5),
+                                    Colors.grey.withValues(alpha: 0.3),
+                                  ]
+                                  : [
+                                    counterButtonColor.withValues(alpha: 0.9),
+                                    counterButtonColor.withValues(alpha: 0.7),
+                                  ],
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                isCompleted
+                                    ? Colors.transparent
+                                    : counterButtonColor.withValues(
+                                      alpha: 0.3,
+                                    ),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child:
+                            isCompleted
+                                ? const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.white,
+                                  size: 28,
+                                )
+                                : const Icon(
+                                  Icons.add,
+                                  color: Colors.white,
+                                  size: 32,
+                                ),
                       ),
                     ),
                   ],
@@ -366,6 +322,7 @@ class _AzkarItemCardState extends State<AzkarItemCard>
               ],
             ],
           ),
+        ),
         ),
       ),
     );

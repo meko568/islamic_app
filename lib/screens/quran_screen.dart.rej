@@ -1,0 +1,113 @@
+diff a/lib/screens/quran_screen.dart b/lib/screens/quran_screen.dart	(rejected hunks)
+@@ -411,7 +455,6 @@ class _QuranScreenState extends State<QuranScreen> {
+     final ayahIndex = _allAyahs.indexWhere((a) => a.number == targetAyah.number);
+     if (ayahIndex < 0) return;
+ 
+-    // 1. Update UI state immediately
+     final surah = _allSurahs.firstWhere(
+       (s) => s.ayahs?.any((a) => a.number == targetAyah.number) ?? false,
+       orElse: () => _allSurahs.first,
+@@ -421,70 +464,47 @@ class _QuranScreenState extends State<QuranScreen> {
+       _currentPage = targetAyah.page;
+       _currentJuz = targetAyah.juz;
+       _currentSurahName = surah.nameArabic;
++      _lastVisibleAyahIndex = ayahIndex;
+     });
+-
+-    // 2. Exact navigation using the Ayah ID (GlobalKey)
+-    // We jump to a rough estimate first so ListView starts building the target area
+-    double estimate = _estimateScrollPosition(targetAyah.number);
+-    _adaptiveScrollController.jumpTo(
+-      estimate.clamp(0.0, _adaptiveScrollController.position.maxScrollExtent),
+-    );
+-
+-    // 3. Repeatedly check for the key's context and snap to it precisely
+-    int attempts = 0;
+-    void snapToKey() {
+-      if (!mounted) return;
+-      
+-      final key = (targetAyah.numberInSurah == 1) 
+-          ? _surahKeys[surah.number] 
+-          : _ayahKeys[targetAyah.number];
+-      
+-      if (key?.currentContext != null) {
+-        Scrollable.ensureVisible(
+-          key!.currentContext!,
+-          duration: const Duration(milliseconds: 300),
+-          curve: Curves.easeOutCubic,
+-          alignment: 0.1, // Put it near the top but not hidden by header
+-        );
+-      } else if (attempts < 15) {
+-        attempts++;
+-        // If not found, move the scroll slightly to force building more items
+-        if (attempts % 3 == 0) {
+-          double jumpDist = (attempts > 6) ? 800.0 : 400.0;
+-          _adaptiveScrollController.jumpTo(
+-            (estimate + jumpDist).clamp(0.0, _adaptiveScrollController.position.maxScrollExtent)
+-          );
+-        }
+-        Future.delayed(const Duration(milliseconds: 60), snapToKey);
+-      }
+-    }
+-
+-    WidgetsBinding.instance.addPostFrameCallback((_) => snapToKey());
+     _saveLastPage(targetAyah.page);
+-  }
+ 
+-  double _estimateScrollPosition(int targetAyahNumber) {
+-    if (_allAyahs.isEmpty) return 0.0;
++    final targetKey = (targetAyah.numberInSurah == 1)
++        ? _surahKeys[surah.number]
++        : _ayahKeys[targetAyah.number];
+ 
+-    final ayahIndex = _allAyahs.indexWhere((a) => a.number == targetAyahNumber);
+-    if (ayahIndex == -1) return 0.0;
++    WidgetsBinding.instance.addPostFrameCallback((_) {
++      _snapToAyah(targetKey, ayahIndex, attempts: 0);
++    });
++  }
+ 
+-    final settings = context.read<SettingsProvider>();
+-    final hasTranslation = settings.quranTranslationLang != 'none';
++  // Brings an ayah into view. If it's already built (nearby), ensureVisible
++  // does it directly. If it's far away and not yet built by the ListView, we
++  // jump proportionally (index / totalCount of the scroll extent) — a
++  // scale-invariant estimate that needs no font-size or line-height guessing
++  // — then retry until the real widget appears and snap to it precisely.
++  void _snapToAyah(GlobalKey? targetKey, int ayahIndex, {required int attempts}) {
++    if (!mounted || !_adaptiveScrollController.hasClients) return;
++
++    final ctx = targetKey?.currentContext;
++    if (ctx != null) {
++      Scrollable.ensureVisible(
++        ctx,
++        duration: const Duration(milliseconds: 300),
++        curve: Curves.easeOutCubic,
++        alignment: 0.1,
++      );
++      return;
++    }
+ 
+-    // Refined estimation factors
+-    double ayahTextFactor = 1.2; // Extra height for text wrapping
+-    double avgAyahHeight = settings.quranFontSize * (hasTranslation ? 8.0 : 4.5) * ayahTextFactor;
+-    double headerHeight = 180.0;
++    if (attempts >= 20) return; // give up gracefully, state is already correct
+ 
+-    int headersCount = 0;
+-    for (int i = 0; i < ayahIndex; i++) {
+-      if (_allAyahs[i].numberInSurah == 1) {
+-        headersCount++;
+-      }
+-    }
++    final maxExtent = _adaptiveScrollController.position.maxScrollExtent;
++    final proportion = ayahIndex / _allAyahs.length;
++    _adaptiveScrollController.jumpTo((proportion * maxExtent).clamp(0.0, maxExtent));
+ 
+-    return (ayahIndex * avgAyahHeight) + (headersCount * headerHeight);
++    Future.delayed(const Duration(milliseconds: 60), () {
++      _snapToAyah(targetKey, ayahIndex, attempts: attempts + 1);
++    });
+   }
+ 
+   void _navigateToPage(int pageNumber) {
