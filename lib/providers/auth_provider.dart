@@ -37,6 +37,7 @@ class AuthProvider extends ChangeNotifier {
       _setLoading(false);
       return true;
     } catch (e) {
+      debugPrint('LOGIN ERROR: $e');
       _errorKey = _authService.errorKey(e);
       _setLoading(false);
       return false;
