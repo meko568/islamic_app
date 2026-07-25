@@ -20,9 +20,9 @@ jobs:
         run: |
           VERSION_LINE=$(grep '^version: ' pubspec.yaml)
           VERSION=$(echo $VERSION_LINE | sed 's/version: //')
-          FULL_VERSION=$(echo $VERSION | cut -d'+' -f1)
           BUILD_NUMBER=$(echo $VERSION | cut -d'+' -f2)
-          echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
+          # Use the full version string (e.g. 1.3.0+7) for the tag to trigger new releases on build number bumps
+          echo "full_version=$VERSION" >> $GITHUB_OUTPUT
           echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
 
       - name: Check if tag exists
@@ -51,6 +51,22 @@ jobs:
         if: steps.check_tag.outputs.exists == 'false'
         run: flutter pub get
 
+      - name: Decode keystore
+        if: steps.check_tag.outputs.exists == 'false'
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/islamic-app-release.jks
+
+      - name: Create key.properties
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          # Use absolute path to ensure Gradle finds the keystore regardless of working directory
+          KEYSTORE_PATH="${GITHUB_WORKSPACE}/android/islamic-app-release.jks"
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=$KEYSTORE_PATH
+          EOF
+
       - name: Build APK
         if: steps.check_tag.outputs.exists == 'false'
         run: flutter build apk --release
@@ -70,7 +86,7 @@ jobs:
         if: steps.check_tag.outputs.exists == 'false'
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: scripts/package.json
 
@@ -91,3 +107,9 @@ jobs:
             "${{ steps.version.outputs.full_version }}" \
             "${{ steps.version.outputs.build_number }}" \
             "https://github.com/meko568/islamic_app/releases/download/v${{ steps.version.outputs.full_version }}/app-release.apk"
+
+      - name: Cleanup signing files
+        if: always()
+        run: |
+          rm -f android/islamic-app-release.jks
+          rm -f android/key.properties
