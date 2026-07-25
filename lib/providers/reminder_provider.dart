@@ -2,8 +2,12 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/reminder_settings.dart';
+import '../services/cloud_sync_service.dart';
 
 class ReminderProvider extends ChangeNotifier {
+  final CloudSyncService _sync = CloudSyncService();
+  String? _uid;
+
   ReminderSettings _settings = ReminderSettings();
   static const String _settingsKey = 'reminder_settings';
 
@@ -19,6 +23,10 @@ class ReminderProvider extends ChangeNotifier {
   bool get isLoaded => _isLoaded;
 
   List<Map<String, dynamic>> get customTasbeehList => _customTasbeehList;
+
+  void attachUser(String? uid) {
+    _uid = uid;
+  }
 
   // Get all available tasbeeh IDs (presets + custom)
   List<String> get allTasbeehIds {
@@ -73,6 +81,7 @@ class ReminderProvider extends ChangeNotifier {
   Future<void> saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_settingsKey, _settings.toJsonString());
+    _sync.pushOnDataChange(_uid);
     notifyListeners();
   }
 
@@ -132,6 +141,7 @@ class ReminderProvider extends ChangeNotifier {
   Future<void> _saveCustomTasbeehList() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_customTasbeehKey, jsonEncode(_customTasbeehList));
+    _sync.pushOnDataChange(_uid);
   }
 
   Future<void> _loadCustomRepeatCounts() async {
@@ -158,6 +168,7 @@ class ReminderProvider extends ChangeNotifier {
       _customRepeatCountsKey,
       jsonEncode(_customRepeatCounts),
     );
+    _sync.pushOnDataChange(_uid);
   }
 
   Future<void> setCustomRepeatCount(String id, int count) async {

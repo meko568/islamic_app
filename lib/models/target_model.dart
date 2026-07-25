@@ -98,3 +98,45 @@ class IslamicTarget {
     ];
   }
 }
+
+class GoalHistoryRecord {
+  final String targetId;
+  final String title;
+  final TargetPeriod period;
+  final int goal;
+  final int progress;
+  final String date;
+
+  GoalHistoryRecord({
+    required this.targetId,
+    required this.title,
+    required this.period,
+    required this.goal,
+    required this.progress,
+    required this.date,
+  });
+
+  bool get isDone => progress >= goal;
+
+  Map<String, dynamic> toJson() => {
+        'targetId': targetId,
+        'title': title,
+        'period': period.name,
+        'goal': goal,
+        'progress': progress,
+        'date': date,
+      };
+
+  factory GoalHistoryRecord.fromJson(Map<String, dynamic> j) =>
+      GoalHistoryRecord(
+        targetId: j['targetId'] as String,
+        title: j['title'] as String,
+        period: TargetPeriod.values.firstWhere(
+          (e) => e.name == j['period'],
+          orElse: () => TargetPeriod.daily,
+        ),
+        goal: j['goal'] as int? ?? 1,
+        progress: j['progress'] as int? ?? 0,
+        date: j['date'] as String? ?? '',
+      );
+}

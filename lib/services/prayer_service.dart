@@ -16,6 +16,10 @@ class PrayerService {
     Prayer.isha: 'العشاء',
   };
 
+  static String getArabicPrayerName(Prayer prayer) {
+    return _arabicPrayerNames[prayer] ?? prayer.name;
+  }
+
   static String getEnglishPrayerName(Prayer prayer) {
     switch (prayer) {
       case Prayer.fajr:
@@ -35,10 +39,8 @@ class PrayerService {
     }
   }
 
-  /// Shows a normal (non-intrusive) notification when the next prayer is
-  /// within ~10 minutes and the previous prayer hasn't been marked as
-  /// prayed yet. Meant to be called once when the app is opened. Only
-  /// fires once per prayer per day to avoid repeat spam.
+  /// Checks if the next prayer is approaching and the previous one wasn't prayed.
+  /// Designed to run in the background via Workmanager.
   static Future<void> checkAndNotifyIfPrayerApproaching(String lang) async {
     try {
       final position = await getCurrentLocation();
@@ -48,11 +50,15 @@ class PrayerService {
         position.latitude,
         position.longitude,
       );
+      
       final secondsUntilNext = getTimeUntilNextPrayer(prayerTimes);
-      if (secondsUntilNext <= 0 || secondsUntilNext > 600) return;
+      
+      // Since background tasks run every 15 mins, we check a 16-min window
+      if (secondsUntilNext <= 0 || secondsUntilNext > 960) return;
 
       final lastPrayer = getCurrentPrayer(prayerTimes);
       if (lastPrayer == Prayer.sunrise) return;
+      
       if (await isPrayerChecked(lastPrayer)) return;
 
       final nextPrayer = getNextPrayer(prayerTimes);
@@ -60,24 +66,26 @@ class PrayerService {
 
       final prefs = await SharedPreferences.getInstance();
       final date = getTodayDateString();
-      final notifiedKey =
-          'prayer_approach_notified_${lastPrayer.name}_$date';
+      final notifiedKey = 'prayer_approach_notified_${lastPrayer.name}_${nextPrayer.name}_$date';
       if (prefs.getBool(notifiedKey) ?? false) return;
       await prefs.setBool(notifiedKey, true);
 
       final lastName = lang == 'ar'
-          ? getArabicPrayerName(lastPrayer)
-          : getEnglishPrayerName(lastPrayer);
+              ? getArabicPrayerName(lastPrayer)
+              : getEnglishPrayerName(lastPrayer);
       final nextName = lang == 'ar'
-          ? getArabicPrayerName(nextPrayer)
-          : getEnglishPrayerName(nextPrayer);
+              ? getArabicPrayerName(nextPrayer)
+              : getEnglishPrayerName(nextPrayer);
 
       const androidDetails = AndroidNotificationDetails(
-        'prayer_reminder_channel',
+        'prayer_reminder_channel_v2',
         'تذكير الصلاة',
         channelDescription: 'تنبيه عند اقتراب دخول وقت صلاة جديدة',
-        importance: Importance.high,
+        importance: Importance.max,
         priority: Priority.high,
+        category: AndroidNotificationCategory.reminder,
+        fullScreenIntent: true,
+        showWhen: true,
       );
       const details = NotificationDetails(android: androidDetails);
 
@@ -88,13 +96,13 @@ class PrayerService {
             ? 'لسه ما صليتش $lastName، ووقت $nextName قرّب يدخل'
             : "You haven't prayed $lastName yet, and $nextName is coming up soon",
         details,
+        payload: 'prayer_reminder',
       );
-    } catch (_) {
-      // Best-effort only - never let a notification failure affect the app.
+    } catch (e) {
+      // Best-effort only
     }
   }
 
-  // Format time to 12hr format with Arabic AM/PM
   static String formatTime(DateTime time) {
     final hour = time.hour;
     final minute = time.minute;
@@ -104,18 +112,14 @@ class PrayerService {
     return '$displayHour:$minuteStr $period';
   }
 
-  // Get today's date string for storage keys
   static String getTodayDateString() {
-    final now = DateTime.now();
-    return DateFormat('yyyy-MM-dd').format(now);
+    return DateFormat('yyyy-MM-dd').format(DateTime.now());
   }
 
-  // Get prayer checked state key
   static String getPrayerCheckedKey(Prayer prayer, String date) {
     return 'prayer_${prayer.name}_checked_$date';
   }
 
-  // Get alert played key
   static String getAlertPlayedKey(
     Prayer currentPrayer,
     Prayer nextPrayer,
@@ -124,21 +128,18 @@ class PrayerService {
     return 'alert_${currentPrayer.name}_${nextPrayer.name}_played_$date';
   }
 
-  // Check if prayer is checked for today
   static Future<bool> isPrayerChecked(Prayer prayer) async {
     final prefs = await SharedPreferences.getInstance();
     final date = getTodayDateString();
     return prefs.getBool(getPrayerCheckedKey(prayer, date)) ?? false;
   }
 
-  // Set prayer checked state
   static Future<void> setPrayerChecked(Prayer prayer, bool checked) async {
     final prefs = await SharedPreferences.getInstance();
     final date = getTodayDateString();
     await prefs.setBool(getPrayerCheckedKey(prayer, date), checked);
   }
 
-  // Check if alert has been played for this prayer transition today
   static Future<bool> hasAlertPlayed(
     Prayer currentPrayer,
     Prayer nextPrayer,
@@ -149,7 +150,6 @@ class PrayerService {
         false;
   }
 
-  // Set alert played state
   static Future<void> setAlertPlayed(
     Prayer currentPrayer,
     Prayer nextPrayer,
@@ -163,48 +163,24 @@ class PrayerService {
     );
   }
 
-  // Get current location
   static Future<Position?> getCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    // Check if location services are enabled.
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-
-    permission = await Geolocator.checkPermission();
-
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        // Permissions are denied, try last known position
-        return await Geolocator.getLastKnownPosition();
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      // Permissions are denied forever, try last known position
-      return await Geolocator.getLastKnownPosition();
-    }
-
-    if (!serviceEnabled) {
-      // Location services are not enabled but we have permission.
-      // We can't get current position, so try last known.
-      return await Geolocator.getLastKnownPosition();
-    }
-
     try {
-      // Try getting current position with a timeout
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          return await Geolocator.getLastKnownPosition();
+        }
+      }
       return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-        timeLimit: const Duration(seconds: 8),
+        desiredAccuracy: LocationAccuracy.low,
+        timeLimit: const Duration(seconds: 5),
       );
-    } catch (e) {
-      // If fails (timeout or other), try last known position as a last resort
+    } catch (_) {
       return await Geolocator.getLastKnownPosition();
     }
   }
 
-  // Calculate prayer times for given coordinates
   static PrayerTimes calculatePrayerTimes(double latitude, double longitude) {
     final coordinates = Coordinates(latitude, longitude);
     final params = CalculationMethod.egyptian.getParameters();
@@ -215,108 +191,56 @@ class PrayerService {
   static Prayer getCurrentPrayer(PrayerTimes prayerTimes) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
-    final prayers = [
-      Prayer.fajr,
-      Prayer.dhuhr,
-      Prayer.asr,
-      Prayer.maghrib,
-      Prayer.isha,
-    ];
+    final prayers = [Prayer.fajr, Prayer.dhuhr, Prayer.asr, Prayer.maghrib, Prayer.isha];
 
     Prayer currentPrayer = Prayer.isha;
-
     for (var prayer in prayers) {
       final prayerTime = prayerTimes.timeForPrayer(prayer);
       if (prayerTime == null) continue;
-
-      final prayerDateTime = DateTime(
-        today.year,
-        today.month,
-        today.day,
-        prayerTime.hour,
-        prayerTime.minute,
-      );
-
+      final prayerDateTime = DateTime(today.year, today.month, today.day, prayerTime.hour, prayerTime.minute);
       if (now.isAfter(prayerDateTime)) {
         currentPrayer = prayer;
       }
     }
-
     return currentPrayer;
   }
 
-  // Get next prayer
   static Prayer? getNextPrayer(PrayerTimes prayerTimes) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
-    final prayers = [
-      Prayer.fajr,
-      Prayer.dhuhr,
-      Prayer.asr,
-      Prayer.maghrib,
-      Prayer.isha,
-    ];
+    final prayers = [Prayer.fajr, Prayer.dhuhr, Prayer.asr, Prayer.maghrib, Prayer.isha];
 
     for (var prayer in prayers) {
       final prayerTime = prayerTimes.timeForPrayer(prayer);
       if (prayerTime == null) continue;
-
-      final prayerDateTime = DateTime(
-        today.year,
-        today.month,
-        today.day,
-        prayerTime.hour,
-        prayerTime.minute,
-      );
-
+      final prayerDateTime = DateTime(today.year, today.month, today.day, prayerTime.hour, prayerTime.minute);
       if (now.isBefore(prayerDateTime)) {
         return prayer;
       }
     }
-
-    // If all prayers have passed, next is Fajr tomorrow
     return Prayer.fajr;
   }
 
-  // Get time until next prayer in seconds
   static int getTimeUntilNextPrayer(PrayerTimes prayerTimes) {
     final nextPrayer = getNextPrayer(prayerTimes);
     if (nextPrayer == null) return 0;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
     final prayerTime = prayerTimes.timeForPrayer(nextPrayer);
     if (prayerTime == null) return 0;
 
     DateTime prayerDateTime;
-
     if (nextPrayer == Prayer.fajr && now.hour > 12) {
-      // Fajr is tomorrow
       final tomorrow = today.add(const Duration(days: 1));
-      prayerDateTime = DateTime(
-        tomorrow.year,
-        tomorrow.month,
-        tomorrow.day,
-        prayerTime.hour,
-        prayerTime.minute,
-      );
+      prayerDateTime = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, prayerTime.hour, prayerTime.minute);
     } else {
-      prayerDateTime = DateTime(
-        today.year,
-        today.month,
-        today.day,
-        prayerTime.hour,
-        prayerTime.minute,
-      );
+      prayerDateTime = DateTime(today.year, today.month, today.day, prayerTime.hour, prayerTime.minute);
     }
 
     return prayerDateTime.difference(now).inSeconds;
   }
 
-  // Format countdown as HH:MM:SS
   static String formatCountdown(int seconds) {
     final hours = seconds ~/ 3600;
     final minutes = (seconds % 3600) ~/ 60;
@@ -324,17 +248,14 @@ class PrayerService {
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 
-  // Check if alert should be triggered
   static bool shouldTriggerAlert(
     PrayerTimes prayerTimes,
     Prayer currentPrayer,
     Prayer? nextPrayer,
   ) {
     if (nextPrayer == null) return false;
-
     final timeUntilNext = getTimeUntilNextPrayer(prayerTimes);
-    final tenMinutesInSeconds = 10 * 60;
-
-    return timeUntilNext <= tenMinutesInSeconds && timeUntilNext > 0;
+    // Trigger within last 10 minutes
+    return timeUntilNext <= 600 && timeUntilNext > 0;
   }
 }

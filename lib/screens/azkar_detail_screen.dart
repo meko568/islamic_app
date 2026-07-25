@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
 import '../providers/tracker_provider.dart';
+import '../services/cloud_sync_service.dart';
 
 class AzkarDetailScreen extends StatefulWidget {
   final AzkarCategory category;
@@ -36,10 +38,20 @@ class _AzkarDetailScreenState extends State<AzkarDetailScreen> {
       counters[azkarZekr] = newCount;
     });
     _checkCategoryCompletion();
+    
+    // Sync to cloud (debounced)
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    CloudSyncService().pushOnDataChange(uid);
   }
 
   void _checkCategoryCompletion() {
-    if (getCompletedCount() != widget.category.items.length) return;
+    final totalItems = widget.category.items.length;
+    if (totalItems == 0) return;
+
+    final completedCount = getCompletedCount();
+    // Mark as done if 80% or more are completed
+    if (completedCount / totalItems < 0.8) return;
+
     final taskId = switch (widget.category.name) {
       'Morning' => 'morning_azkar',
       'Evening' => 'evening_azkar',

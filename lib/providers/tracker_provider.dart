@@ -1,15 +1,14 @@
 import 'dart:async';
 import 'package:adhan/adhan.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../models/daily_task_model.dart';
 import '../services/tracker_storage_service.dart';
-import '../services/firestore_sync_service.dart';
+import '../services/cloud_sync_service.dart';
 import '../services/prayer_service.dart';
 
 class TrackerProvider extends ChangeNotifier {
-  final FirestoreSyncService _sync = FirestoreSyncService();
+  final CloudSyncService _sync = CloudSyncService();
   static const _uuid = Uuid();
 
   String? _uid;
@@ -67,7 +66,7 @@ class TrackerProvider extends ChangeNotifier {
   /// so a prayer marked there shows up here automatically (only valid for
   /// the current calendar day, since PrayerService only tracks "today").
   Future<void> _mergeAutoDetectedPrayers() async {
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final today = await TrackerStorageService.getCurrentTrackerDate();
     if (_date != today) return;
 
     bool changed = false;
@@ -86,7 +85,7 @@ class TrackerProvider extends ChangeNotifier {
   /// Call this whenever the tracker screen becomes visible again, to pick up
   /// prayers checked in the meantime from the Prayer Times screen.
   Future<void> refresh() async {
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final today = await TrackerStorageService.getCurrentTrackerDate();
     if (_date != today) {
       await load();
       return;
@@ -115,9 +114,7 @@ class TrackerProvider extends ChangeNotifier {
     _record.tasks[taskId] = TaskCompletion(done: true, auto: true);
     notifyListeners();
     await TrackerStorageService.saveRecord(_record);
-    if (_uid != null) {
-      unawaited(_sync.pushTrackerRecord(_uid!, _record));
-    }
+    _sync.pushOnDataChange(_uid);
   }
 
   Future<void> toggleTask(String taskId) async {
@@ -133,9 +130,7 @@ class TrackerProvider extends ChangeNotifier {
       await PrayerService.setPrayerChecked(prayer, !current);
     }
 
-    if (_uid != null) {
-      unawaited(_sync.pushTrackerRecord(_uid!, _record));
-    }
+    _sync.pushOnDataChange(_uid);
   }
 
   Future<void> addCustomTask(String title) async {
@@ -143,9 +138,7 @@ class TrackerProvider extends ChangeNotifier {
     _customTasks = [..._customTasks, task];
     await TrackerStorageService.saveCustomTasks(_customTasks);
     notifyListeners();
-    if (_uid != null) {
-      unawaited(_sync.pushCustomTasks(_uid!, _customTasks));
-    }
+    _sync.pushOnDataChange(_uid);
   }
 
   Future<void> removeCustomTask(String taskId) async {
@@ -154,10 +147,7 @@ class TrackerProvider extends ChangeNotifier {
     await TrackerStorageService.saveCustomTasks(_customTasks);
     await TrackerStorageService.saveRecord(_record);
     notifyListeners();
-    if (_uid != null) {
-      unawaited(_sync.pushCustomTasks(_uid!, _customTasks));
-      unawaited(_sync.pushTrackerRecord(_uid!, _record));
-    }
+    _sync.pushOnDataChange(_uid);
   }
 
   Future<List<DailyRecord>> loadHistory(int days) async {
@@ -167,40 +157,13 @@ class TrackerProvider extends ChangeNotifier {
   }
 
   /// Called by the app whenever the signed-in user changes (login/logout).
-  /// On first login, merges cloud data into local so nothing is lost.
   Future<void> attachUser(String? uid) async {
     if (_uid == uid) return;
     _uid = uid;
-    if (uid == null) return;
-
-    final cloud = await _sync.pullTrackerData(uid);
-    if (cloud == null) {
-      // Nothing in the cloud yet - push what we have locally as first backup.
-      unawaited(_sync.pushTrackerRecord(uid, _record));
-      unawaited(_sync.pushCustomTasks(uid, _customTasks));
-      return;
+    // The main.dart _AuthSync handles the global syncOnLogin which includes tracker.
+    if (uid != null) {
+      // Just refresh local state after potential pull
+      await load();
     }
-
-    // Merge cloud custom tasks with local ones (union by id).
-    final mergedCustom = {for (final t in cloud.customTasks) t.id: t};
-    for (final t in _customTasks) {
-      mergedCustom[t.id] = t;
-    }
-    _customTasks = mergedCustom.values.toList();
-    await TrackerStorageService.saveCustomTasks(_customTasks);
-
-    // Merge today's record: a task counts as done if either side has it done.
-    final cloudRecord = cloud.records[_date];
-    if (cloudRecord != null) {
-      for (final entry in cloudRecord.tasks.entries) {
-        final localDone = _record.tasks[entry.key]?.done ?? false;
-        if (entry.value.done && !localDone) {
-          _record.tasks[entry.key] = entry.value;
-        }
-      }
-      await TrackerStorageService.saveRecord(_record);
-    }
-
-    notifyListeners();
   }
 }

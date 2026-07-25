@@ -1,0 +1,93 @@
+name: Flutter Release & Firestore Update
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse pubspec.yaml version
+        id: version
+        run: |
+          VERSION_LINE=$(grep '^version: ' pubspec.yaml)
+          VERSION=$(echo $VERSION_LINE | sed 's/version: //')
+          FULL_VERSION=$(echo $VERSION | cut -d'+' -f1)
+          BUILD_NUMBER=$(echo $VERSION | cut -d'+' -f2)
+          echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          TAG="v${{ steps.version.outputs.full_version }}"
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Stop if tag exists
+        if: steps.check_tag.outputs.exists == 'true'
+        run: |
+          echo "Version ${{ steps.version.outputs.full_version }} already released. Skipping job."
+          exit 0
+
+      - uses: subosito/flutter-action@v2
+        if: steps.check_tag.outputs.exists == 'false'
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        if: steps.check_tag.outputs.exists == 'false'
+        run: flutter pub get
+
+      - name: Build APK
+        if: steps.check_tag.outputs.exists == 'false'
+        run: flutter build apk --release
+
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.full_version }}
+          name: v${{ steps.version.outputs.full_version }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: scripts/package.json
+
+      - name: Install Node dependencies
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          cd scripts
+          npm install
+
+      - name: Update Firestore version
+        if: steps.check_tag.outputs.exists == 'false'
+        env:
+          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/service-account.json
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT_KEY" > /tmp/service-account.json
+          node scripts/update_firestore_version.js \
+            "${{ steps.version.outputs.full_version }}" \
+            "${{ steps.version.outputs.build_number }}" \
+            "https://github.com/meko568/islamic_app/releases/download/v${{ steps.version.outputs.full_version }}/app-release.apk"

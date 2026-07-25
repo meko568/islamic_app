@@ -141,7 +141,8 @@ class AppStrings {
       'allow_close_anytime_desc':
           'عند التعطيل، لا يمكن إغلاق التذكير إلا بعد إكمال العدد',
       'auto_show_overlay': 'ظهور التذكير تلقائياً (Pop-up)',
-      'auto_show_overlay_desc': 'عند التفعيل، سيظهر عداد التسبيح مباشرة على الشاشة فوق التطبيقات الأخرى',
+      'auto_show_overlay_desc':
+          'عند التفعيل، سيظهر عداد التسبيح مباشرة على الشاشة فوق التطبيقات الأخرى',
       'overlay_permission_required': 'إذن التراكب مطلوب',
       'overlay_permission_desc':
           'لإظهار تذكير التسبيح فوق التطبيقات الأخرى، يرجى منح إذن "الظهور فوق التطبيقات الأخرى"',
@@ -153,13 +154,20 @@ class AppStrings {
       'ok': 'موافق',
       'cancel': 'إلغاء',
       'test_reminder': 'تجربة التذكير الآن',
-      'reminder_enabled_success': 'تم تفعيل التذكير بنجاح. سيظهر التذكير القادم خلال الفترة المحددة.',
+      'reminder_enabled_success':
+          'تم تفعيل التذكير بنجاح. سيظهر التذكير القادم خلال الفترة المحددة.',
       'location_settings_desc': 'خدمة الموقع مغلقة. يرجى تفعيل GPS للمتابعة.',
-      'honor_huawei_tip': 'مستخدمي هواتف Honor/Huawei: إذا لم يظهر التذكير التلقائي، يرجى ضبط "تشغيل التطبيق" يدوياً من إعدادات البطارية والتأكد من السماح بالظهور فوق التطبيقات الأخرى.',
+      'honor_huawei_tip':
+          'مستخدمي هواتف Honor/Huawei: إذا لم يظهر التذكير التلقائي، يرجى ضبط "تشغيل التطبيق" يدوياً من إعدادات البطارية والتأكد من السماح بالظهور فوق التطبيقات الأخرى.',
+      'fix_background_issues': 'ضبط إعدادات التشغيل',
       'save_bookmark': 'حفظ علامة',
       'go_to_bookmark': 'انتقل للعلامة',
       'bookmark_saved': 'تم حفظ العلامة في صفحة {page}',
       'no_bookmark': 'لا توجد علامة محفوظة',
+      'update_available': 'تحديث جديد متاح',
+      'update_now': 'تحديث الآن',
+      'later': 'لاحقاً',
+      'new_version_available': 'إصدار جديد متاح ({version})',
 
       // Auth
       'login': 'تسجيل الدخول',
@@ -177,7 +185,8 @@ class AppStrings {
       'guest_mode_warning':
           'بياناتك محفوظة على هذا الجهاز فقط. لو حذفت التطبيق أو غيرت جهازك هتفقدها. سجّل دخول لحفظها بشكل دائم.',
       'passwords_dont_match': 'كلمتا المرور غير متطابقتين',
-      'password_too_short': 'كلمة المرور لازم تكون 6 حروف أو أرقام على الأقل',      'account': 'الحساب',
+      'password_too_short': 'كلمة المرور لازم تكون 6 حروف أو أرقام على الأقل',
+      'account': 'الحساب',
       'signed_in_as': 'مسجل الدخول باسم',
       'guest_account': 'حساب زائر',
       'auth_error_email_in_use': 'هذا البريد الإلكتروني مستخدم بالفعل',
@@ -195,7 +204,8 @@ class AppStrings {
       'add_custom_task': 'إضافة مهمة',
       'custom_task_hint': 'اكتب اسم المهمة',
       'auto_detected': 'تلقائي',
-      'prayer_time_not_reached': 'لسه معادش وقتها',      'no_tasks_yet': 'لا توجد مهام بعد',
+      'prayer_time_not_reached': 'لسه معادش وقتها',
+      'no_tasks_yet': 'لا توجد مهام بعد',
       'delete_task': 'حذف المهمة',
       'day_starts_at_fajr': 'يبدأ اليوم مع أذان الفجر',
       'history': 'السجل',
@@ -221,12 +231,16 @@ class AppStrings {
       'save': 'حفظ',
       'delete': 'حذف',
       'edit': 'تعديل',
-      'progress': 'التقدم',
       'tafsir': 'التفسير',
-      'tafsir_load_failed': 'تعذر تحميل التفسير، تأكد من الاتصال بالإنترنت وحاول تاني',
-      'retry': 'إعادة المحاولة',
+      'tafsir_load_failed':
+          'تعذر تحميل التفسير، تأكد من الاتصال بالإنترنت وحاول تاني',
       'lifetime_tasbeeh': 'إجمالي التسبيح',
       'perfect_days': 'أيام مثالية',
+      'goals_summary': 'ملخص الأهداف',
+      'goal_status': 'الحالة',
+      'goal_made': 'منجز',
+      'goal_not_made': 'غير منجز',
+      'goal_type': 'النوع',
     },
     'en': {
       'home': 'Home',
@@ -373,7 +387,8 @@ class AppStrings {
       'allow_close_anytime_desc':
           'When disabled, reminder can only be closed after completing the count',
       'auto_show_overlay': 'Automatic Pop-up Reminder',
-      'auto_show_overlay_desc': 'When enabled, the tasbeeh counter will appear directly over other apps',
+      'auto_show_overlay_desc':
+          'When enabled, the tasbeeh counter will appear directly over other apps',
       'overlay_permission_required': 'Overlay Permission Required',
       'overlay_permission_desc':
           'To show tasbeeh reminder over other apps, please grant "Display over other apps" permission',
@@ -387,13 +402,21 @@ class AppStrings {
       'ok': 'OK',
       'cancel': 'Cancel',
       'test_reminder': 'Test Reminder Now',
-      'reminder_enabled_success': 'Reminder enabled successfully. Next reminder will appear within the set interval.',
-      'location_settings_desc': 'Location service is off. Please enable GPS to continue.',
-      'honor_huawei_tip': 'Honor/Huawei Users: If automatic reminders don\'t appear, please set "App Launch" to manual in Battery settings and ensure "Display over other apps" is allowed.',
+      'reminder_enabled_success':
+          'Reminder enabled successfully. Next reminder will appear within the set interval.',
+      'location_settings_desc':
+          'Location service is off. Please enable GPS to continue.',
+      'honor_huawei_tip':
+          'Honor/Huawei Users: If automatic reminders don\'t appear, please set "App Launch" to manual in Battery settings and ensure "Display over other apps" is allowed.',
+      'fix_background_issues': 'Fix Background Issues',
       'save_bookmark': 'Save Bookmark',
       'go_to_bookmark': 'Go to Bookmark',
       'bookmark_saved': 'Bookmark saved at page {page}',
       'no_bookmark': 'No bookmark saved',
+      'update_available': 'New Update Available',
+      'update_now': 'Update Now',
+      'later': 'Later',
+      'new_version_available': 'A new version is available ({version})',
 
       // Auth
       'login': 'Log In',
@@ -457,13 +480,16 @@ class AppStrings {
       'save': 'Save',
       'delete': 'Delete',
       'edit': 'Edit',
-      'progress': 'Progress',
       'tafsir': 'Tafsir',
       'tafsir_load_failed':
           "Couldn't load the tafsir, check your internet connection and try again",
-      'retry': 'Retry',
       'lifetime_tasbeeh': 'Total Tasbeeh',
       'perfect_days': 'Perfect Days',
+      'goals_summary': 'Goals Summary',
+      'goal_status': 'Status',
+      'goal_made': 'Done',
+      'goal_not_made': 'Pending',
+      'goal_type': 'Period',
     },
   };
 

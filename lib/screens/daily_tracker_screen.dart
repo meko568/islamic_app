@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/tracker_provider.dart';
 import '../models/daily_task_model.dart';
 import '../theme/app_theme.dart';
+import '../services/advice_service.dart';
 import 'login_screen.dart';
 import 'tracker_history_screen.dart';
 
@@ -205,6 +206,36 @@ class _DailyTrackerScreenState extends State<DailyTrackerScreen>
                           ),
                         ),
                       ),
+                    
+                    if (doneCount < totalCount && totalCount > 0)
+                      Builder(builder: (context) {
+                        final advice = AdviceService.getRandomAdvice(lang, type: AdviceType.general);
+                        return Container(
+                          margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.lightbulb_outline, color: AppColors.primary, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  advice,
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
                     Expanded(
                       child: tracker.allTasks.isEmpty
                           ? Center(

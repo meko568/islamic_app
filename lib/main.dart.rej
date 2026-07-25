@@ -7,3 +7,12 @@ diff a/lib/main.dart b/lib/main.dart	(rejected hunks)
  import 'screens/azkar_screen.dart';
  import 'screens/azkar_detail_screen.dart';
  import 'screens/prayer_times_screen.dart';
+@@ -103,7 +104,7 @@ class IslamicApp extends StatelessWidget {
+             darkTheme: AppTheme.darkTheme(settings.appFontSize),
+             themeMode: settings.themeMode,
+             locale: Locale(settings.appLanguage),
+-            home: const HomeScreen(),
++            home: settings.isLoading ? const LoadingScreen() : const HomeScreen(),
+             routes: {
+               '/home': (context) => const HomeScreen(),
+               '/azkar': (context) => const AzkarScreen(),

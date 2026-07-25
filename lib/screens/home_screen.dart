@@ -2,14 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../widgets/feature_card.dart';
+import '../widgets/update_dialog.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/update_check_service.dart';
 import 'profile_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForUpdate();
+    });
+  }
+
+  Future<void> _checkForUpdate() async {
+    final updateResult = await UpdateCheckService().checkForUpdate();
+    if (updateResult.hasUpdate && mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: !updateResult.forceUpdate,
+        builder: (context) => UpdateDialog(updateInfo: updateResult),
+      );
+    }
+  }
 
   LinearGradient _buildFeatureGradient(bool isDark) {
     if (isDark) {
@@ -162,3 +188,4 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
+

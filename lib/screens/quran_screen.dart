@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,9 +13,8 @@ import '../services/quran_service.dart';
 import '../widgets/quran_sidebar.dart';
 import '../providers/settings_provider.dart';
 import '../l10n/app_strings.dart';
+import '../services/cloud_sync_service.dart';
 import 'tafsir_screen.dart';
-
-enum QuranLayoutMode { mushaf, adaptive }
 
 class QuranScreen extends StatefulWidget {
   final int? initialSurahNumber;
@@ -26,7 +26,6 @@ class QuranScreen extends StatefulWidget {
 
 class _QuranScreenState extends State<QuranScreen> {
   late PageController _pageController;
-  late ScrollController _adaptiveScrollController;
   bool _isLoading = true;
   String? _errorMessage;
   int _currentPage = 1;
@@ -40,31 +39,24 @@ class _QuranScreenState extends State<QuranScreen> {
   final Map<int, String> _translationCache = {};
   bool _translationLoading = false;
 
-  // ✅ FIX 1: Cache كل الآيات في الذاكرة — مفيش reload
   final Map<int, List<Ayah>> _pageCache = {};
   final Map<int, bool> _pageExists = {};
   final Map<int, int> _surahNumberForAyahNumber = {};
   final Map<int, Surah> _surahByNumber = {};
-  final List<int> _headersBeforeIndex = [];
   bool _mushafFullyDownloaded = false;
   List<Surah> _allSurahs = [];
   List<Ayah> _allAyahs = [];
-  final Map<int, GlobalKey> _surahKeys = {};
-  final Map<int, GlobalKey> _ayahKeys = {};
-  final GlobalKey _adaptiveListKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-    _adaptiveScrollController = ScrollController();
     _loadQuran().then((_) {
       if (widget.initialSurahNumber != null && mounted) {
         _navigateToAyah(widget.initialSurahNumber!, 1);
       }
     });
     _pageController.addListener(_onPageChanged);
-    _adaptiveScrollController.addListener(_onAdaptiveScrollChanged);
     _getMushafImagesPath();
     _loadBookmark();
   }
@@ -95,6 +87,10 @@ class _QuranScreenState extends State<QuranScreen> {
           ),
         );
       }
+      
+      // Sync to cloud
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      CloudSyncService().pushOnDataChange(uid);
     } catch (_) {}
   }
 
@@ -148,9 +144,7 @@ class _QuranScreenState extends State<QuranScreen> {
   @override
   void dispose() {
     _pageController.removeListener(_onPageChanged);
-    _adaptiveScrollController.removeListener(_onAdaptiveScrollChanged);
     _pageController.dispose();
-    _adaptiveScrollController.dispose();
     super.dispose();
   }
 
@@ -168,7 +162,6 @@ class _QuranScreenState extends State<QuranScreen> {
         _mushafFullyDownloaded = isDownloaded;
       });
 
-      // Pre-check file existence for all pages
       await _checkPageExistence();
     } catch (_) {}
   }
@@ -180,7 +173,6 @@ class _QuranScreenState extends State<QuranScreen> {
     for (int i = 1; i <= 604; i++) {
       final imagePath = '$_mushafImagesPath/page_$i.png';
       final imageFile = File(imagePath);
-      // Check if file exists AND has content (not 0 bytes)
       final exists = await imageFile.exists();
       if (exists) {
         final size = await imageFile.length();
@@ -216,90 +208,9 @@ class _QuranScreenState extends State<QuranScreen> {
     }
   }
 
-  // Throttle guard so we don't run a render-tree walk on every scroll pixel.
-  bool _scrollCheckScheduled = false;
-
-  void _onAdaptiveScrollChanged() {
-    if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return;
-    if (_scrollCheckScheduled) return;
-    _scrollCheckScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollCheckScheduled = false;
-      _updateCurrentPageFromRealPositions();
-    });
-  }
-
-  // Finds which ayah is actually nearest the top of the viewport using the
-  // real, already-laid-out RenderBox of each ayah's GlobalKey — no guessed
-  // per-item heights. Only ayahs currently built by the ListView have a
-  // non-null currentContext, so this scan is always cheap (bounded by
-  // whatever the ListView + cacheExtent currently has on screen).
-  int _lastVisibleAyahIndex = 0;
-
-  Ayah? _findTopVisibleAyah() {
-    if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return null;
-    final viewportBox =
-        _adaptiveListKey.currentContext?.findRenderObject() as RenderBox?;
-    if (viewportBox == null) return null;
-
-    // Only the items near what the ListView currently has built will have a
-    // non-null context, so we widen the window until we find at least one,
-    // instead of paying for a full scan of every ayah every frame.
-    int window = 80;
-    while (window <= _allAyahs.length) {
-      final start = (_lastVisibleAyahIndex - window).clamp(0, _allAyahs.length - 1);
-      final end = (_lastVisibleAyahIndex + window).clamp(0, _allAyahs.length - 1);
-
-      Ayah? best;
-      int bestIndex = _lastVisibleAyahIndex;
-      double bestDy = double.infinity;
-      for (int i = start; i <= end; i++) {
-        final ayah = _allAyahs[i];
-        final ctx = _ayahKeys[ayah.number]?.currentContext;
-        if (ctx == null) continue;
-        final box = ctx.findRenderObject() as RenderBox?;
-        if (box == null || !box.attached) continue;
-        final dy = box.localToGlobal(Offset.zero, ancestor: viewportBox).dy;
-        final distance = dy.abs();
-        if (distance < bestDy) {
-          bestDy = distance;
-          best = ayah;
-          bestIndex = i;
-        }
-      }
-      if (best != null) {
-        _lastVisibleAyahIndex = bestIndex;
-        return best;
-      }
-      window *= 2;
-    }
-    return null;
-  }
-
-  void _updateCurrentPageFromRealPositions() {
-    final visibleAyah = _findTopVisibleAyah();
-    if (visibleAyah == null || !mounted) return;
-
-    final surah = _allSurahs.firstWhere(
-      (s) => s.ayahs?.any((a) => a.number == visibleAyah.number) ?? false,
-      orElse: () => _allSurahs.first,
-    );
-
-    final newPage = visibleAyah.page;
-    if (newPage != _currentPage) {
-      _saveLastPage(newPage);
-    }
-    setState(() {
-      _currentSurahName = surah.nameArabic;
-      _currentJuz = visibleAyah.juz;
-      _currentPage = newPage;
-    });
-  }
-
   Future<void> _loadQuran() async {
     try {
       final surahs = await QuranService.getQuran();
-      // بناء الـ cache كله مرة واحدة
       for (final surah in surahs) {
         if (surah.ayahs == null) continue;
         _surahByNumber[surah.number] = surah;
@@ -311,30 +222,10 @@ class _QuranScreenState extends State<QuranScreen> {
       setState(() {
         _allSurahs = surahs;
         _allAyahs = surahs.expand((s) => s.ayahs ?? <Ayah>[]).toList();
-        
-        // ✅ Pre-initialize keys for EVERY ayah to ensure stable IDs for navigation
-        for (var ayah in _allAyahs) {
-          _ayahKeys[ayah.number] = GlobalKey(debugLabel: 'ayah_${ayah.number}');
-        }
-        for (var surah in _allSurahs) {
-          _surahKeys[surah.number] = GlobalKey(debugLabel: 'surah_${surah.number}');
-        }
-
-        // Prefix-sum of surah headers before each index, so scroll-position
-        // estimation during navigation is O(1) instead of re-scanning
-        // everything on every jump.
-        _headersBeforeIndex.clear();
-        int headerCount = 0;
-        for (final a in _allAyahs) {
-          _headersBeforeIndex.add(headerCount);
-          if (a.numberInSurah == 1) headerCount++;
-        }
-
         _isLoading = false;
         if (surahs.isNotEmpty) _currentSurahName = surahs.first.nameArabic;
       });
       await _loadLastPage();
-      // Load translations for initial page's surah after last page is loaded
       if (_pageCache[_currentPage] != null &&
           _pageCache[_currentPage]!.isNotEmpty) {
         final currentAyahs = _pageCache[_currentPage]!;
@@ -366,17 +257,8 @@ class _QuranScreenState extends State<QuranScreen> {
           _currentPage = lastPage;
         });
 
-        final settings = context.read<SettingsProvider>();
-        final currentLayoutMode =
-            settings.quranLayoutMode == 'mushaf'
-                ? QuranLayoutMode.mushaf
-                : QuranLayoutMode.adaptive;
-
-        if (currentLayoutMode == QuranLayoutMode.mushaf) {
+        if (_pageController.hasClients) {
           _pageController.jumpToPage(lastPage - 1);
-        } else {
-          // Adaptive mode: scroll to the first ayah of the last page
-          _scrollToPageInAdaptive(lastPage);
         }
         _updatePageInfo(lastPage);
       }
@@ -387,14 +269,16 @@ class _QuranScreenState extends State<QuranScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('last_page', pageNumber);
+      
+      // Sync to cloud (debounced)
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      CloudSyncService().pushOnDataChange(uid);
     } catch (_) {}
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final settings = context.watch<SettingsProvider>();
-    // If translation language changes, reload translations for current surah
     final currentAyahs = _pageCache[_currentPage];
     if (currentAyahs != null && currentAyahs.isNotEmpty) {
       final surah =
@@ -411,7 +295,6 @@ class _QuranScreenState extends State<QuranScreen> {
   void _updatePageInfo(int page) {
     final ayahs = _pageCache[page];
     if (ayahs == null || ayahs.isEmpty) return;
-    // نبحث في الـ cache عن اسم السورة
     final surah =
         _allSurahs.where((s) {
           return s.ayahs?.any((a) => a.number == ayahs.first.number) ?? false;
@@ -421,7 +304,7 @@ class _QuranScreenState extends State<QuranScreen> {
         _currentSurahName = surah.nameArabic;
         _loadEnglishTranslation(
           surah.number,
-        ); // Load translations for this surah
+        );
       }
       _currentJuz = ayahs.first.juz;
     });
@@ -430,27 +313,17 @@ class _QuranScreenState extends State<QuranScreen> {
   Future<void> _navigateToAyah(int surahNumber, int ayahNumber) async {
     final settings = context.read<SettingsProvider>();
     final lang = settings.appLanguage;
-    final currentLayoutMode =
-        settings.quranLayoutMode == 'mushaf'
-            ? QuranLayoutMode.mushaf
-            : QuranLayoutMode.adaptive;
     try {
       final ayah = await QuranService.getAyah(surahNumber, ayahNumber);
       if (ayah != null) {
-        if (currentLayoutMode == QuranLayoutMode.mushaf) {
-          // Mushaf mode: navigate to page
-          if (_pageController.hasClients) {
-            _pageController.animateToPage(
-              ayah.page - 1,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-            );
-          } else {
-            setState(() => _currentPage = ayah.page);
-          }
+        if (_pageController.hasClients) {
+          _pageController.animateToPage(
+            ayah.page - 1,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
         } else {
-          // Adaptive mode: scroll to ayah in list
-          _scrollToAyahInAdaptive(ayah);
+          setState(() => _currentPage = ayah.page);
         }
       }
     } catch (e) {
@@ -470,105 +343,15 @@ class _QuranScreenState extends State<QuranScreen> {
     }
   }
 
-  void _scrollToAyahInAdaptive(Ayah targetAyah) {
-    if (!_adaptiveScrollController.hasClients || _allAyahs.isEmpty) return;
-
-    final ayahIndex = _allAyahs.indexWhere((a) => a.number == targetAyah.number);
-    if (ayahIndex < 0) return;
-
-    // 1. Update UI state immediately
-    final surahNumber = _surahNumberForAyahNumber[targetAyah.number];
-    final surah = surahNumber == null
-        ? _allSurahs.first
-        : (_surahByNumber[surahNumber] ?? _allSurahs.first);
-
-    setState(() {
-      _currentPage = targetAyah.page;
-      _currentJuz = targetAyah.juz;
-      _currentSurahName = surah.nameArabic;
-    });
-
-    // 2. Exact navigation using the Ayah ID (GlobalKey)
-    // We jump to a rough estimate first so ListView starts building the target area
-    double estimate = _estimateScrollPosition(targetAyah.number);
-    _adaptiveScrollController.jumpTo(
-      estimate.clamp(0.0, _adaptiveScrollController.position.maxScrollExtent),
-    );
-
-    // 3. Repeatedly check for the key's context and snap to it precisely
-    int attempts = 0;
-    void snapToKey() {
-      if (!mounted) return;
-      
-      final key = (targetAyah.numberInSurah == 1) 
-          ? _surahKeys[surah.number] 
-          : _ayahKeys[targetAyah.number];
-      
-      if (key?.currentContext != null) {
-        Scrollable.ensureVisible(
-          key!.currentContext!,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          alignment: 0.1, // Put it near the top but not hidden by header
-        );
-      } else if (attempts < 15) {
-        attempts++;
-        // If not found, move the scroll slightly to force building more items
-        if (attempts % 3 == 0) {
-          double jumpDist = (attempts > 6) ? 800.0 : 400.0;
-          _adaptiveScrollController.jumpTo(
-            (estimate + jumpDist).clamp(0.0, _adaptiveScrollController.position.maxScrollExtent)
-          );
-        }
-        Future.delayed(const Duration(milliseconds: 60), snapToKey);
-      }
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => snapToKey());
-    _saveLastPage(targetAyah.page);
-  }
-
-  double _estimateScrollPosition(int targetAyahNumber) {
-    if (_allAyahs.isEmpty) return 0.0;
-
-    final ayahIndex = _allAyahs.indexWhere((a) => a.number == targetAyahNumber);
-    if (ayahIndex == -1) return 0.0;
-
-    final settings = context.read<SettingsProvider>();
-    final hasTranslation = settings.quranTranslationLang != 'none';
-
-    // Refined estimation factors
-    double ayahTextFactor = 1.2; // Extra height for text wrapping
-    double avgAyahHeight = settings.quranFontSize * (hasTranslation ? 8.0 : 4.5) * ayahTextFactor;
-    double headerHeight = 180.0;
-
-    int headersCount = ayahIndex < _headersBeforeIndex.length
-        ? _headersBeforeIndex[ayahIndex]
-        : 0;
-
-    return (ayahIndex * avgAyahHeight) + (headersCount * headerHeight);
-  }
-
   void _navigateToPage(int pageNumber) {
-    final settings = context.read<SettingsProvider>();
-    final currentLayoutMode =
-        settings.quranLayoutMode == 'mushaf'
-            ? QuranLayoutMode.mushaf
-            : QuranLayoutMode.adaptive;
-    if (currentLayoutMode == QuranLayoutMode.mushaf) {
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          pageNumber - 1,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      } else {
-        // Controller not attached yet, just update state
-        setState(() => _currentPage = pageNumber);
-      }
+    if (_pageController.hasClients) {
+      _pageController.animateToPage(
+        pageNumber - 1,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     } else {
-      // Adaptive mode: scroll to first ayah of this page
-      _scrollToPageInAdaptive(pageNumber);
+      setState(() => _currentPage = pageNumber);
     }
   }
 
@@ -578,176 +361,17 @@ class _QuranScreenState extends State<QuranScreen> {
       orElse: () => _allAyahs.first,
     );
 
-    final settings = context.read<SettingsProvider>();
-    if (settings.quranLayoutMode == 'mushaf') {
+    if (_pageController.hasClients) {
       _pageController.jumpToPage(targetAyah.page - 1);
     } else {
-      _scrollToAyahInAdaptive(targetAyah);
+      setState(() => _currentPage = targetAyah.page);
     }
-  }
-
-  void _showLayoutSwitcher(SettingsProvider settings, String lang) {
-    final currentLayoutMode =
-        settings.quranLayoutMode == 'mushaf'
-            ? QuranLayoutMode.mushaf
-            : QuranLayoutMode.adaptive;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder:
-          (context) => Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFFFFF8F0),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 20),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Text(
-                  AppStrings.get('choose_display_mode', lang),
-                  style: GoogleFonts.cairo(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1A0A00),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildLayoutOption(
-                        currentLayoutMode,
-                        QuranLayoutMode.mushaf,
-                        AppStrings.get('mushaf', lang),
-                        Icons.menu_book,
-                        settings,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildLayoutOption(
-                        currentLayoutMode,
-                        QuranLayoutMode.adaptive,
-                        AppStrings.get('adaptive', lang),
-                        Icons.format_align_right,
-                        settings,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-    );
-  }
-
-  Widget _buildLayoutOption(
-    QuranLayoutMode currentLayoutMode,
-    QuranLayoutMode mode,
-    String label,
-    IconData icon,
-    SettingsProvider settings,
-  ) {
-    final isSelected = currentLayoutMode == mode;
-    return GestureDetector(
-      onTap: () async {
-        final previousMode = currentLayoutMode;
-        await settings.setQuranLayoutMode(mode.name);
-        Navigator.pop(context);
-
-        // Preserve position when switching layouts
-        if (previousMode == QuranLayoutMode.mushaf &&
-            mode == QuranLayoutMode.adaptive) {
-          // Switching from Mushaf to Adaptive: scroll to first ayah of current page
-          _scrollToPageInAdaptive(_currentPage);
-        } else if (previousMode == QuranLayoutMode.adaptive &&
-            mode == QuranLayoutMode.mushaf) {
-          // Switching from Adaptive to Mushaf: jump to page of visible ayah
-          _jumpToPageFromAdaptive();
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color:
-              isSelected
-                  ? const Color(0xFF8B6914).withValues(alpha: 0.15)
-                  : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color:
-                isSelected
-                    ? const Color(0xFF8B6914)
-                    : Colors.grey.withValues(alpha: 0.3),
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              size: 32,
-              color:
-                  isSelected
-                      ? const Color(0xFF8B6914)
-                      : Colors.grey.withValues(alpha: 0.6),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: GoogleFonts.amiri(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color:
-                    isSelected
-                        ? const Color(0xFF8B6914)
-                        : const Color(0xFF1A0A00),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _scrollToPageInAdaptive(int pageNumber) {
-    final ayahs = _pageCache[pageNumber];
-    if (ayahs == null || ayahs.isEmpty) return;
-    _scrollToAyahInAdaptive(ayahs.first);
-  }
-
-  void _jumpToPageFromAdaptive() {
-    if (_allAyahs.isEmpty) return;
-    // Use the ayah we already found via real render positions while the
-    // user was scrolling (_lastVisibleAyahIndex), rather than a guessed
-    // pixel-per-item conversion.
-    final visibleAyah = _findTopVisibleAyah() ?? _allAyahs[_lastVisibleAyahIndex];
-    _pageController.jumpToPage(visibleAyah.page - 1);
-    setState(() {
-      _currentPage = visibleAyah.page;
-    });
-    _updatePageInfo(visibleAyah.page);
   }
 
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
     final lang = settings.appLanguage;
-    final currentLayoutMode =
-        settings.quranLayoutMode == 'mushaf'
-            ? QuranLayoutMode.mushaf
-            : QuranLayoutMode.adaptive;
 
     return Directionality(
       textDirection: lang == 'ar' ? TextDirection.rtl : TextDirection.ltr,
@@ -802,15 +426,11 @@ class _QuranScreenState extends State<QuranScreen> {
                       surahNumber: surahNumber,
                       ayahNumber: firstAyah.numberInSurah,
                       surahName: _surahByNumber[surahNumber]?.nameArabic,
+                      ayahsOnPage: ayahsOnPage,
                     ),
                   ),
                 );
               },
-            ),
-            IconButton(
-              icon: const Icon(Icons.view_module, color: Color(0xFF8B6914)),
-              onPressed: () => _showLayoutSwitcher(settings, lang),
-              tooltip: AppStrings.get('change_display_mode', lang),
             ),
           ],
         ),
@@ -824,9 +444,7 @@ class _QuranScreenState extends State<QuranScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _errorMessage != null
                 ? _buildErrorView(lang)
-                : currentLayoutMode == QuranLayoutMode.mushaf
-                ? _buildMushafView(lang)
-                : _buildAdaptiveView(settings, lang),
+                : _buildMushafView(lang),
       ),
     );
   }
@@ -875,12 +493,6 @@ class _QuranScreenState extends State<QuranScreen> {
               style: GoogleFonts.amiri(fontSize: 20, fontWeight: FontWeight.w600),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
-            Text(
-              AppStrings.get('use_adaptive_web', lang),
-              style: GoogleFonts.cairo(fontSize: 14, color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
           ],
         ),
       ),
@@ -890,16 +502,18 @@ class _QuranScreenState extends State<QuranScreen> {
   Widget _buildMushafView(String lang) {
     return Stack(
       children: [
-        // Mushaf Mode with local images
-        PageView.builder(
-          controller: _pageController,
-          itemCount: 604,
-          reverse: true, // RTL: swipe right = next page
-          itemBuilder:
-              (context, index) => _buildMushafImagePage(index + 1, lang),
+        Directionality(
+          textDirection: TextDirection.rtl,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: 604,
+            reverse: false,
+            itemBuilder:
+                (context, index) => _buildMushafImagePage(index + 1, lang),
+          ),
         ),
 
-        // شريط المعلومات
+        // Info bar
         Positioned(
           bottom: 0,
           left: 0,
@@ -965,18 +579,15 @@ class _QuranScreenState extends State<QuranScreen> {
       int successfullyDownloaded = 0;
       List<int> pagesToDownload = [];
 
-      // 1. Identify which pages are TRULY missing or broken
       for (int i = 1; i <= 604; i++) {
         final f = File('${quranDir.path}/page_$i.png');
         bool isValid = false;
         try {
           if (f.existsSync()) {
             final size = f.lengthSync();
-            // Reject files that are too small (likely error pages)
             if (size > 30000) {
               isValid = true;
             } else {
-              // Delete broken file immediately to allow re-download
               f.deleteSync();
             }
           }
@@ -1000,8 +611,7 @@ class _QuranScreenState extends State<QuranScreen> {
         return;
       }
 
-      // 2. Download missing pages
-      const int batchSize = 4; // Slightly smaller batch for stability
+      const int batchSize = 4;
       for (int i = 0; i < pagesToDownload.length; i += batchSize) {
         if (!mounted || !_isDownloading) break;
 
@@ -1062,7 +672,6 @@ class _QuranScreenState extends State<QuranScreen> {
   }
 
   Widget _buildMushafImagePage(int pageNumber, String lang) {
-    // Guard for web platform
     if (kIsWeb) {
       return _buildWebMessage(lang);
     }
@@ -1074,8 +683,6 @@ class _QuranScreenState extends State<QuranScreen> {
     final imagePath = '$_mushafImagesPath/page_$pageNumber.png';
     final imageFile = File(imagePath);
     
-    // DIRECT CHECK: If file exists and isn't empty, SHOW IT. 
-    // We use a safe check here because lengthSync might be problematic if file is partially written
     bool exists = false;
     try {
        exists = imageFile.existsSync() && imageFile.lengthSync() > 5000;
@@ -1087,14 +694,12 @@ class _QuranScreenState extends State<QuranScreen> {
         child: Image.file(
           imageFile,
           fit: BoxFit.contain,
-          // We use a key that includes the file size to force a reload if the file changes
           key: ValueKey('page_${pageNumber}_${imageFile.lengthSync()}'),
           errorBuilder: (context, error, stackTrace) => _buildRetryView(pageNumber, imageFile, lang),
         ),
       );
     }
 
-    // If file doesn't exist, show download prompt
     return _buildDownloadPrompt(pageNumber, lang);
   }
 
@@ -1172,18 +777,15 @@ class _QuranScreenState extends State<QuranScreen> {
           ElevatedButton.icon(
             onPressed: () async {
               try {
-                // Clear from Flutter image cache
                 await FileImage(file).evict();
                 if (await file.exists()) await file.delete();
                 
                 setState(() {
                   _pageExists[pageNumber] = false;
-                  _isDownloading = true; // Show loading immediately
+                  _isDownloading = true;
                 });
                 
-                // Small delay to ensure disk is ready
                 await Future.delayed(const Duration(milliseconds: 300));
-                
                 _downloadMushaf();
               } catch (e) {
                 debugPrint('Retry error: $e');
@@ -1199,300 +801,5 @@ class _QuranScreenState extends State<QuranScreen> {
         ],
       ),
     );
-  }
-
-  Widget _buildAdaptiveView(SettingsProvider settings, String lang) {
-    if (_allAyahs.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.cloud_download_outlined, size: 64, color: Color(0xFF8B6914)),
-            const SizedBox(height: 16),
-            Text(
-              AppStrings.get('quran_text_not_downloaded', lang),
-              style: GoogleFonts.amiri(fontSize: 20, fontWeight: FontWeight.w600),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              AppStrings.get('tap_to_download_text', lang),
-              style: GoogleFonts.cairo(fontSize: 14, color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadQuran,
-              icon: const Icon(Icons.download),
-              label: Text(AppStrings.get('download_now', lang)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF8B6914),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Stack(
-      children: [
-        // Scrollable list of ayahs
-        ListView.builder(
-          key: _adaptiveListKey,
-          controller: _adaptiveScrollController,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          itemCount: _allAyahs.length,
-          cacheExtent: 2000,
-          addAutomaticKeepAlives: false,
-          itemBuilder: (context, index) {
-            final ayah = _allAyahs[index];
-            final isSurahStart = ayah.numberInSurah == 1;
-
-            return RepaintBoundary(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (isSurahStart) _buildAdaptiveSurahHeader(ayah),
-                  _buildAdaptiveAyahRow(ayah, settings),
-                  if (index < _allAyahs.length - 1) const SizedBox(height: 12),
-                ],
-              ),
-            );
-          },
-        ),
-
-        // شريط المعلومات
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            color: const Color(0xFF8B6914).withValues(alpha: 0.15),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  AppStrings.get(
-                    'juz',
-                    lang,
-                    params: {'number': _currentJuz.toString()},
-                  ),
-                  style: const TextStyle(
-                    fontFamily: 'UthmanicHafs',
-                    fontSize: 12,
-                    color: Color(0xFF8B6914),
-                  ),
-                ),
-                Text(
-                  '$_currentPage',
-                  style: const TextStyle(
-                    fontFamily: 'UthmanicHafs',
-                    fontSize: 13,
-                    color: Color(0xFF8B6914),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  _currentSurahName,
-                  style: const TextStyle(
-                    fontFamily: 'UthmanicHafs',
-                    fontSize: 12,
-                    color: Color(0xFF8B6914),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAdaptiveSurahHeader(Ayah ayah) {
-    final lang = context.watch<SettingsProvider>().appLanguage;
-
-    // Find the surah for this ayah (O(1) via prebuilt index)
-    final surahNumber = _surahNumberForAyahNumber[ayah.number];
-    final surah = surahNumber == null ? null : _surahByNumber[surahNumber];
-    if (surah == null) return const SizedBox.shrink();
-
-    final title =
-        lang == 'ar'
-            ? '${AppStrings.get('surah_prefix', lang)} ${surah.nameArabic}'
-            : '${AppStrings.get('surah_prefix', lang)} ${surah.nameEnglish}';
-    return Container(
-      key: _surahKeys[surah.number],
-      margin: const EdgeInsets.symmetric(vertical: 16),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF8B6914).withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF8B6914).withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: 'UthmanicHafs',
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF8B6914),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            AppStrings.get(
-              'surah_info',
-              lang,
-              params: {
-                'type': AppStrings.get(
-                  surah.revelationType == 'Meccan' ? 'meccan' : 'medinan',
-                  lang,
-                ),
-                'count': surah.ayahCount.toString(),
-                'plural': surah.ayahCount == 1 ? '' : 's',
-              },
-            ),
-            textAlign: TextAlign.center,
-            style: GoogleFonts.cairo(
-              fontSize: 14,
-              color: Colors.grey.withValues(alpha: 0.7),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAdaptiveAyahRow(Ayah ayah, SettingsProvider settings) {
-    final translationLang = settings.quranTranslationLang;
-    final lang = settings.appLanguage;
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Container(
-        key: _ayahKeys[ayah.number],
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: const Color(0xFF8B6914).withValues(alpha: 0.15),
-            width: 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: ayah.text,
-                    style: TextStyle(
-                      fontFamily: 'UthmanicHafs',
-                      fontSize: settings.quranFontSize,
-                      height: 2.0,
-                      color: const Color(0xFF1A0A00),
-                    ),
-                  ),
-                  WidgetSpan(
-                    alignment: PlaceholderAlignment.middle,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF8B6914),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '${AppStrings.get('ayah_number_prefix', lang)}${_toArabicNumerals(ayah.numberInSurah)}${AppStrings.get('ayah_number_suffix', lang)}',
-                          style: const TextStyle(
-                            fontFamily: 'UthmanicHafs',
-                            fontSize: 16,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (translationLang != 'none')
-              Padding(
-                padding: const EdgeInsets.only(top: 4, left: 8, right: 8),
-                child:
-                    _translationLoading
-                        ? const CircularProgressIndicator()
-                        : Text(
-                          _translationCache[ayah.numberInSurah] ?? '',
-                          style: TextStyle(
-                            fontSize: settings.quranFontSize * 0.65,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.6),
-                            fontStyle: FontStyle.italic,
-                            height: 1.4,
-                          ),
-                          textAlign:
-                              translationLang == 'ar'
-                                  ? TextAlign.right
-                                  : TextAlign.left,
-                          textDirection:
-                              translationLang == 'ar'
-                                  ? TextDirection.rtl
-                                  : TextDirection.ltr,
-                        ),
-              ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () {
-                  final surahNumber = _surahNumberForAyahNumber[ayah.number];
-                  if (surahNumber == null) return;
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => TafsirScreen(
-                        surahNumber: surahNumber,
-                        ayahNumber: ayah.numberInSurah,
-                        surahName: _surahByNumber[surahNumber]?.nameArabic,
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.menu_book_outlined, size: 16),
-                label: Text(
-                  AppStrings.get('tafsir', lang),
-                  style: const TextStyle(fontSize: 12),
-                ),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(50, 30),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _toArabicNumerals(int number) {
-    const n = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-    return number.toString().split('').map((d) => n[int.parse(d)]).join();
   }
 }

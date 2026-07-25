@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../providers/reminder_provider.dart';
 import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
+import '../providers/target_provider.dart';
+import '../services/stats_service.dart';
 
 class TasbeehReminderScreen extends StatefulWidget {
   final String tasbeehId;
@@ -24,6 +26,11 @@ class _TasbeehReminderScreenState extends State<TasbeehReminderScreen> {
       setState(() {
         _currentCount++;
       });
+
+      // Update stats and targets
+      context.read<TargetProvider>().incrementAllByLinkType('tasbeeh');
+      StatsService.incrementLifetimeTasbeeh();
+
       if (_currentCount == _targetCount) {
         _showCompletion();
       }
@@ -34,7 +41,9 @@ class _TasbeehReminderScreenState extends State<TasbeehReminderScreen> {
     final lang = context.read<SettingsProvider>().appLanguage;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(lang == 'ar' ? 'تم الانتهاء، بارك الله فيك' : 'Completed, MashAllah'),
+        content: Text(
+          lang == 'ar' ? 'تم الانتهاء، بارك الله فيك' : 'Completed, MashAllah',
+        ),
         backgroundColor: Colors.green,
       ),
     );
@@ -50,9 +59,7 @@ class _TasbeehReminderScreenState extends State<TasbeehReminderScreen> {
 
     // Wait until settings are loaded
     if (!reminderProvider.isLoaded) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     // Initialize values once loaded
@@ -61,7 +68,10 @@ class _TasbeehReminderScreenState extends State<TasbeehReminderScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppStrings.get('tasbeeh_reminder', lang), style: GoogleFonts.cairo()),
+        title: Text(
+          AppStrings.get('tasbeeh_reminder', lang),
+          style: GoogleFonts.cairo(),
+        ),
       ),
       body: Center(
         child: Column(
@@ -71,7 +81,10 @@ class _TasbeehReminderScreenState extends State<TasbeehReminderScreen> {
               padding: const EdgeInsets.all(20.0),
               child: Text(
                 _tasbeehText!,
-                style: GoogleFonts.cairo(fontSize: 24, fontWeight: FontWeight.bold),
+                style: GoogleFonts.cairo(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -84,19 +97,27 @@ class _TasbeehReminderScreenState extends State<TasbeehReminderScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Theme.of(context).primaryColor.withOpacity(0.1),
-                  border: Border.all(color: Theme.of(context).primaryColor, width: 5),
+                  border: Border.all(
+                    color: Theme.of(context).primaryColor,
+                    width: 5,
+                  ),
                 ),
                 child: Center(
                   child: Text(
                     '$_currentCount / $_targetCount',
-                    style: GoogleFonts.cairo(fontSize: 32, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.cairo(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
             ),
             const SizedBox(height: 20),
             Text(
-              lang == 'ar' ? 'اضغط على الدائرة للعد' : 'Tap the circle to count',
+              lang == 'ar'
+                  ? 'اضغط على الدائرة للعد'
+                  : 'Tap the circle to count',
               style: GoogleFonts.cairo(color: Colors.grey),
             ),
           ],

@@ -3,17 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/target_model.dart';
 import '../services/target_storage_service.dart';
-import '../services/firestore_sync_service.dart';
+import '../services/cloud_sync_service.dart';
 
 class TargetProvider extends ChangeNotifier {
-  final FirestoreSyncService _sync = FirestoreSyncService();
+  final CloudSyncService _sync = CloudSyncService();
   static const _uuid = Uuid();
 
   String? _uid;
   List<IslamicTarget> _targets = [];
+  List<GoalHistoryRecord> _history = [];
   bool _loading = true;
 
   List<IslamicTarget> get targets => _targets;
+  List<GoalHistoryRecord> get history => _history;
   bool get loading => _loading;
 
   TargetProvider() {
@@ -24,6 +26,7 @@ class TargetProvider extends ChangeNotifier {
     _loading = true;
     notifyListeners();
     _targets = await TargetStorageService.loadTargets();
+    _history = await TargetStorageService.loadHistory();
     await _resetExpiredCycles();
     _loading = false;
     notifyListeners();
@@ -34,14 +37,27 @@ class TargetProvider extends ChangeNotifier {
   Future<void> _resetExpiredCycles() async {
     bool changed = false;
     for (final t in _targets) {
-      final key = TargetStorageService.currentPeriodKey(t.period);
+      final key = await TargetStorageService.currentPeriodKey(t.period);
       if (t.periodKey != key) {
+        // Before resetting, save to history
+        await TargetStorageService.addToHistory(GoalHistoryRecord(
+          targetId: t.id,
+          title: t.title,
+          period: t.period,
+          goal: t.goal,
+          progress: t.progress,
+          date: t.periodKey,
+        ));
+        
         t.periodKey = key;
         t.progress = 0;
         changed = true;
       }
     }
-    if (changed) await TargetStorageService.saveTargets(_targets);
+    if (changed) {
+      await TargetStorageService.saveTargets(_targets);
+      _history = await TargetStorageService.loadHistory();
+    }
   }
 
   Future<void> addTarget({
@@ -58,21 +74,43 @@ class TargetProvider extends ChangeNotifier {
       period: period,
       goal: goal,
       unit: unit,
-      periodKey: TargetStorageService.currentPeriodKey(period),
+      periodKey: await TargetStorageService.currentPeriodKey(period),
       isPreset: isPreset,
       linkType: linkType,
     );
     _targets = [..._targets, target];
     await TargetStorageService.saveTargets(_targets);
     notifyListeners();
-    _pushIfLoggedIn();
+    _sync.pushOnDataChange(_uid);
+  }
+
+  Future<void> updateTarget({
+    required String id,
+    String? title,
+    int? goal,
+    String? unit,
+  }) async {
+    final index = _targets.indexWhere((t) => t.id == id);
+    if (index == -1) return;
+
+    final target = _targets[index];
+    if (title != null) target.title = title.trim();
+    if (goal != null) {
+      target.goal = goal;
+      if (target.progress > target.goal) target.progress = target.goal;
+    }
+    if (unit != null) target.unit = unit.trim();
+
+    await TargetStorageService.saveTargets(_targets);
+    notifyListeners();
+    _sync.pushOnDataChange(_uid);
   }
 
   Future<void> removeTarget(String id) async {
     _targets = _targets.where((t) => t.id != id).toList();
     await TargetStorageService.saveTargets(_targets);
     notifyListeners();
-    _pushIfLoggedIn();
+    _sync.pushOnDataChange(_uid);
   }
 
   Future<void> incrementProgress(String id, {int by = 1}) async {
@@ -80,7 +118,7 @@ class TargetProvider extends ChangeNotifier {
     target.progress = (target.progress + by).clamp(0, target.goal);
     await TargetStorageService.saveTargets(_targets);
     notifyListeners();
-    _pushIfLoggedIn();
+    _sync.pushOnDataChange(_uid);
   }
 
   Future<void> setProgress(String id, int value) async {
@@ -88,7 +126,7 @@ class TargetProvider extends ChangeNotifier {
     target.progress = value.clamp(0, target.goal);
     await TargetStorageService.saveTargets(_targets);
     notifyListeners();
-    _pushIfLoggedIn();
+    _sync.pushOnDataChange(_uid);
   }
 
   /// Called from the Tasbeeh screen on every tap: bumps every active target
@@ -104,35 +142,16 @@ class TargetProvider extends ChangeNotifier {
     if (changed) {
       await TargetStorageService.saveTargets(_targets);
       notifyListeners();
-      _pushIfLoggedIn();
+      _sync.pushOnDataChange(_uid);
     }
   }
 
-  void _pushIfLoggedIn() {
-    if (_uid != null) {
-      unawaited(_sync.pushTargets(_uid!, _targets));
-    }
-  }
-
-  /// Called whenever the signed-in user changes; merges cloud targets with
-  /// local ones the first time a user logs in on this device.
+  /// Called whenever the signed-in user changes.
   Future<void> attachUser(String? uid) async {
     if (_uid == uid) return;
     _uid = uid;
-    if (uid == null) return;
-
-    final cloud = await _sync.pullTargets(uid);
-    if (cloud == null) {
-      unawaited(_sync.pushTargets(uid, _targets));
-      return;
+    if (uid != null) {
+      await load();
     }
-
-    final merged = {for (final t in cloud) t.id: t};
-    for (final t in _targets) {
-      merged[t.id] = t;
-    }
-    _targets = merged.values.toList();
-    await TargetStorageService.saveTargets(_targets);
-    notifyListeners();
   }
 }

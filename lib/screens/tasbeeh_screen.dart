@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +8,7 @@ import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
 import '../providers/target_provider.dart';
 import '../services/stats_service.dart';
+import '../services/cloud_sync_service.dart';
 
 class TasbeehScreen extends StatefulWidget {
   const TasbeehScreen({super.key});
@@ -188,6 +190,10 @@ class _TasbeehScreenState extends State<TasbeehScreen> {
     _saveCounters();
     context.read<TargetProvider>().incrementAllByLinkType('tasbeeh');
     StatsService.incrementLifetimeTasbeeh();
+    
+    // Sync to cloud (debounced)
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    CloudSyncService().pushOnDataChange(uid);
   }
 
   void _showResetDialog() {

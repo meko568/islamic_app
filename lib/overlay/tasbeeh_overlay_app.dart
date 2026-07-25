@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/reminder_scheduler_service.dart';
+import '../services/stats_service.dart';
+import '../services/target_storage_service.dart';
 
 class TasbeehOverlayApp extends StatefulWidget {
   const TasbeehOverlayApp({super.key});
@@ -70,6 +72,10 @@ class _TasbeehOverlayAppState extends State<TasbeehOverlayApp> {
     });
 
     HapticFeedback.lightImpact();
+
+    // Update stats and targets
+    StatsService.incrementLifetimeTasbeeh();
+    TargetStorageService.incrementAllByLinkType('tasbeeh');
 
     if (_currentCount >= _targetCount) {
       _onCompletion();
