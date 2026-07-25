@@ -209,7 +209,18 @@ class _DailyTrackerScreenState extends State<DailyTrackerScreen>
                     
                     if (doneCount < totalCount && totalCount > 0)
                       Builder(builder: (context) {
-                        final advice = AdviceService.getRandomAdvice(lang, type: AdviceType.general);
+                        final missedTasks = tracker.allTasks.where((t) => !tracker.isDone(t.id)).toList();
+                        String advice;
+                        
+                        if (missedTasks.isNotEmpty) {
+                          // Pick the first missed task for a specific advice, or generic encouragement
+                          final task = missedTasks.first;
+                          // If it's a prayer or specific task, we can use the custom encouragement
+                          advice = AdviceService.getCustomEncouragement(lang, task.title(lang));
+                        } else {
+                          advice = AdviceService.getRandomAdvice(lang, type: AdviceType.encouragement);
+                        }
+
                         return Container(
                           margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                           padding: const EdgeInsets.all(12),

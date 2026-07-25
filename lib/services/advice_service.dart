@@ -43,6 +43,22 @@ class AdviceService {
     'Remembrance (Dhikr) is the life of the heart; do not let your heart wither.',
   ];
 
+  static const _encouragementAdvicesAr = [
+    'لا تحزن على ما فاتك اليوم، استعن بالله واجعل هدفك إكماله غداً.',
+    'كل يوم هو فرصة جديدة لبداية أفضل مع الله، لا تستسلم.',
+    'المهم هو الاستمرار وعدم اليأس، حاول مرة أخرى غداً بكل عزم.',
+    'تذكر أن الله يحب العبد الذي يحاول ويجتهد، غداً سيكون أفضل بإذن الله.',
+    'اجعل تقصير اليوم دافعاً لك للتميز والنشاط في الغد.',
+  ];
+
+  static const _encouragementAdvicesEn = [
+    'Do not grieve over what you missed today; seek help from Allah and aim to complete it tomorrow.',
+    'Every day is a new opportunity for a better start with Allah; do not give up.',
+    'The important thing is to continue and not despair; try again tomorrow with full determination.',
+    'Remember that Allah loves the servant who tries and strives; tomorrow will be better, God willing.',
+    'Let today\'s shortcoming be a motivation for you to excel and be active tomorrow.',
+  ];
+
   static String getRandomAdvice(String lang, {AdviceType type = AdviceType.general}) {
     // Use current date as seed so advice is consistent for the day
     final now = DateTime.now();
@@ -59,6 +75,9 @@ class AdviceService {
       case AdviceType.azkar:
         advices = isAr ? _azkarAdvicesAr : _azkarAdvicesEn;
         break;
+      case AdviceType.encouragement:
+        advices = isAr ? _encouragementAdvicesAr : _encouragementAdvicesEn;
+        break;
       case AdviceType.general:
       default:
         advices = isAr ? _generalAdvicesAr : _generalAdvicesEn;
@@ -66,6 +85,15 @@ class AdviceService {
 
     return advices[random.nextInt(advices.length)];
   }
+
+  static String getCustomEncouragement(String lang, String itemName) {
+    final isAr = lang == 'ar';
+    if (isAr) {
+      return 'تذكر أن $itemName فرصة عظيمة للأجر، حاول ألا تفوتك غداً بإذن الله.';
+    } else {
+      return 'Remember that $itemName is a great opportunity for reward; try not to miss it tomorrow, God willing.';
+    }
+  }
 }
 
-enum AdviceType { general, prayer, azkar }
+enum AdviceType { general, prayer, azkar, encouragement }

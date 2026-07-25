@@ -427,10 +427,13 @@ class _TargetsScreenState extends State<TargetsScreen> with SingleTickerProvider
       ...targetProvider.history,
     ];
 
-    final hasIncompleteGoals = targetProvider.targets.any((t) => !t.isDone);
-    final advice = hasIncompleteGoals 
-        ? AdviceService.getRandomAdvice(lang, type: AdviceType.general)
-        : null;
+    final incompleteGoals = targetProvider.targets.where((t) => !t.isDone).toList();
+    String? advice;
+    
+    if (incompleteGoals.isNotEmpty) {
+      final target = incompleteGoals.first;
+      advice = AdviceService.getCustomEncouragement(lang, target.title);
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
