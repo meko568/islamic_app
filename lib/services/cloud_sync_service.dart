@@ -102,11 +102,7 @@ class CloudSyncService {
 
       // 3. Tracker Data (Keep same)
       final customTasks = await TrackerStorageService.loadCustomTasks();
-      final now = DateTime.now();
-      final records = await TrackerStorageService.loadHistory(
-        now.subtract(const Duration(days: 60)), // Back up 2 months
-        now
-      );
+      final records = await TrackerStorageService.loadAllRecords();
       
       final trackerData = {
         'customTasks': customTasks.map((e) => e.toJson()).toList(),
@@ -144,17 +140,17 @@ class CloudSyncService {
         if (data['theme_mode'] != null) await prefs.setString('theme_mode', data['theme_mode']);
         if (data['app_language'] != null) await prefs.setString('app_language', data['app_language']);
         if (data['quran_translation'] != null) await prefs.setString('quran_translation', data['quran_translation']);
-        if (data['app_font_size'] != null) await prefs.setDouble('app_font_size', data['app_font_size'].toDouble());
-        if (data['quran_font_size'] != null) await prefs.setDouble('quran_font_size', data['quran_font_size'].toDouble());
+        if (data['app_font_size'] != null) await prefs.setDouble('app_font_size', (data['app_font_size'] as num).toDouble());
+        if (data['quran_font_size'] != null) await prefs.setDouble('quran_font_size', (data['quran_font_size'] as num).toDouble());
         if (data['is_first_launch'] != null) await prefs.setBool('is_first_launch', data['is_first_launch']);
-        if (data['bookmarked_page'] != null) await prefs.setInt('bookmarked_page', data['bookmarked_page']);
-        if (data['last_page'] != null) await prefs.setInt('last_page', data['last_page']);
+        if (data['bookmarked_page'] != null) await prefs.setInt('bookmarked_page', (data['bookmarked_page'] as num).toInt());
+        if (data['last_page'] != null) await prefs.setInt('last_page', (data['last_page'] as num).toInt());
         
         if (data['reminder_settings'] != null) await prefs.setString('reminder_settings', data['reminder_settings']);
         if (data['custom_tasbeeh_list'] != null) await prefs.setString('custom_tasbeeh_list', data['custom_tasbeeh_list']);
         if (data['custom_repeat_counts'] != null) await prefs.setString('custom_repeat_counts', data['custom_repeat_counts']);
         
-        if (data['lifetime_tasbeeh_count'] != null) await prefs.setInt('lifetime_tasbeeh_count', data['lifetime_tasbeeh_count']);
+        if (data['lifetime_tasbeeh_count'] != null) await prefs.setInt('lifetime_tasbeeh_count', (data['lifetime_tasbeeh_count'] as num).toInt());
         if (data['daily_tasks_history'] != null) await prefs.setString('daily_tasks_history', data['daily_tasks_history']);
         if (data['islamic_targets_history'] != null) await prefs.setString('islamic_targets_history', data['islamic_targets_history']);
         
@@ -172,8 +168,8 @@ class CloudSyncService {
             for (var entry in counters.entries) {
               final phrase = entry.key;
               final phraseCounters = entry.value as Map<String, dynamic>;
-              await prefs.setInt('tasbeeh_${phrase}_main', phraseCounters['main'] ?? 100);
-              await prefs.setInt('tasbeeh_${phrase}_round', phraseCounters['round'] ?? 0);
+              await prefs.setInt('tasbeeh_${phrase}_main', (phraseCounters['main'] as num?)?.toInt() ?? 100);
+              await prefs.setInt('tasbeeh_${phrase}_round', (phraseCounters['round'] as num?)?.toInt() ?? 0);
             }
           }
         }
@@ -226,18 +222,28 @@ class CloudSyncService {
     try {
       final prefs = await SharedPreferences.getInstance();
       
-      // Check if local data is "fresh" (default)
-      // We use is_first_launch as a proxy, or check if reminder_settings exists
+      // Check if local data is "fresh"
       final isFresh = prefs.getBool('is_first_launch') ?? true;
       
       // Check if cloud data exists
       final settingsSnap = await _settingsDoc(uid).get();
       
-      if (settingsSnap.exists && isFresh) {
-        // Fresh install + cloud data exists -> Pull
-        await pullCloudDataToLocal(uid);
+      if (settingsSnap.exists) {
+        // If cloud data exists, we almost always want to PULL it after a reinstall
+        // or a new login, unless the local data is already significant.
+        final lifetimeTasbeeh = prefs.getInt('lifetime_tasbeeh_count') ?? 0;
+        
+        // If it's a fresh install OR local data is empty, pull from cloud.
+        if (isFresh || lifetimeTasbeeh == 0) {
+          await pullCloudDataToLocal(uid);
+          // After a successful restore, we should ensure onboarding is skipped
+          await prefs.setBool('is_first_launch', false);
+        } else {
+          // If the user already has significant local data, push it to merge/backup.
+          await pushLocalDataToCloud(uid);
+        }
       } else {
-        // Either has local data or no cloud data -> Push as first backup/sync
+        // No cloud data exists -> Push current local data as the first backup.
         await pushLocalDataToCloud(uid);
       }
     } catch (e) {

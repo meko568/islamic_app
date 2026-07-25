@@ -123,6 +123,31 @@ class TrackerStorageService {
     return records;
   }
 
+  /// Loads ALL stored tracker records from SharedPreferences.
+  static Future<List<DailyRecord>> loadAllRecords() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys();
+    final records = <DailyRecord>[];
+    
+    for (final key in keys) {
+      if (key.startsWith(_recordPrefix)) {
+        final raw = prefs.getString(key);
+        if (raw != null) {
+          try {
+            records.add(
+              DailyRecord.fromJson(
+                Map<String, dynamic>.from(jsonDecode(raw) as Map),
+              ),
+            );
+          } catch (_) {}
+        }
+      }
+    }
+    // Sort by date descending
+    records.sort((a, b) => b.date.compareTo(a.date));
+    return records;
+  }
+
   static Future<List<CustomTaskDef>> loadCustomTasks() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_customTasksKey);

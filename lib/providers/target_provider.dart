@@ -57,6 +57,7 @@ class TargetProvider extends ChangeNotifier {
     if (changed) {
       await TargetStorageService.saveTargets(_targets);
       _history = await TargetStorageService.loadHistory();
+      _sync.pushOnDataChange(_uid);
     }
   }
 
