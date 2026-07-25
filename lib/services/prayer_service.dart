@@ -59,13 +59,13 @@ class PrayerService {
       final lastPrayer = getCurrentPrayer(prayerTimes);
       if (lastPrayer == Prayer.sunrise) return;
       
-      if (await isPrayerChecked(lastPrayer)) return;
+      final date = getDateString(prayerTimes);
+      if (await isPrayerChecked(lastPrayer, date: date)) return;
 
       final nextPrayer = getNextPrayer(prayerTimes);
       if (nextPrayer == null) return;
 
       final prefs = await SharedPreferences.getInstance();
-      final date = getTodayDateString();
       final notifiedKey = 'prayer_approach_notified_${lastPrayer.name}_${nextPrayer.name}_$date';
       if (prefs.getBool(notifiedKey) ?? false) return;
       await prefs.setBool(notifiedKey, true);
@@ -116,6 +116,11 @@ class PrayerService {
     return DateFormat('yyyy-MM-dd').format(DateTime.now());
   }
 
+  static String getDateString(PrayerTimes prayerTimes) {
+    final dc = prayerTimes.dateComponents;
+    return DateFormat('yyyy-MM-dd').format(DateTime(dc.year, dc.month, dc.day));
+  }
+
   static String getPrayerCheckedKey(Prayer prayer, String date) {
     return 'prayer_${prayer.name}_checked_$date';
   }
@@ -128,37 +133,39 @@ class PrayerService {
     return 'alert_${currentPrayer.name}_${nextPrayer.name}_played_$date';
   }
 
-  static Future<bool> isPrayerChecked(Prayer prayer) async {
+  static Future<bool> isPrayerChecked(Prayer prayer, {String? date}) async {
     final prefs = await SharedPreferences.getInstance();
-    final date = getTodayDateString();
-    return prefs.getBool(getPrayerCheckedKey(prayer, date)) ?? false;
+    final dateStr = date ?? getTodayDateString();
+    return prefs.getBool(getPrayerCheckedKey(prayer, dateStr)) ?? false;
   }
 
-  static Future<void> setPrayerChecked(Prayer prayer, bool checked) async {
+  static Future<void> setPrayerChecked(Prayer prayer, bool checked, {String? date}) async {
     final prefs = await SharedPreferences.getInstance();
-    final date = getTodayDateString();
-    await prefs.setBool(getPrayerCheckedKey(prayer, date), checked);
+    final dateStr = date ?? getTodayDateString();
+    await prefs.setBool(getPrayerCheckedKey(prayer, dateStr), checked);
   }
 
   static Future<bool> hasAlertPlayed(
     Prayer currentPrayer,
-    Prayer nextPrayer,
-  ) async {
+    Prayer nextPrayer, {
+    String? date,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
-    final date = getTodayDateString();
-    return prefs.getBool(getAlertPlayedKey(currentPrayer, nextPrayer, date)) ??
+    final dateStr = date ?? getTodayDateString();
+    return prefs.getBool(getAlertPlayedKey(currentPrayer, nextPrayer, dateStr)) ??
         false;
   }
 
   static Future<void> setAlertPlayed(
     Prayer currentPrayer,
     Prayer nextPrayer,
-    bool played,
-  ) async {
+    bool played, {
+    String? date,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
-    final date = getTodayDateString();
+    final dateStr = date ?? getTodayDateString();
     await prefs.setBool(
-      getAlertPlayedKey(currentPrayer, nextPrayer, date),
+      getAlertPlayedKey(currentPrayer, nextPrayer, dateStr),
       played,
     );
   }
@@ -184,20 +191,45 @@ class PrayerService {
   static PrayerTimes calculatePrayerTimes(double latitude, double longitude) {
     final coordinates = Coordinates(latitude, longitude);
     final params = CalculationMethod.egyptian.getParameters();
-    final date = DateComponents.from(DateTime.now());
-    return PrayerTimes(coordinates, date, params);
+    final now = DateTime.now();
+
+    // Default to today
+    final components = DateComponents.from(now);
+    final todayPT = PrayerTimes(coordinates, components, params);
+
+    // Tracker day logic: if it's currently before Fajr, the "active day"
+    // is still yesterday (so you can see/check your Isha).
+    final fajr = todayPT.timeForPrayer(Prayer.fajr);
+    if (fajr != null && now.isBefore(fajr)) {
+      final yesterday = now.subtract(const Duration(days: 1));
+      return PrayerTimes(coordinates, DateComponents.from(yesterday), params);
+    }
+
+    return todayPT;
   }
 
   static Prayer getCurrentPrayer(PrayerTimes prayerTimes) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final prayers = [Prayer.fajr, Prayer.dhuhr, Prayer.asr, Prayer.maghrib, Prayer.isha];
+    final dc = prayerTimes.dateComponents;
+    final prayers = [
+      Prayer.fajr,
+      Prayer.dhuhr,
+      Prayer.asr,
+      Prayer.maghrib,
+      Prayer.isha,
+    ];
 
     Prayer currentPrayer = Prayer.isha;
     for (var prayer in prayers) {
       final prayerTime = prayerTimes.timeForPrayer(prayer);
       if (prayerTime == null) continue;
-      final prayerDateTime = DateTime(today.year, today.month, today.day, prayerTime.hour, prayerTime.minute);
+      final prayerDateTime = DateTime(
+        dc.year,
+        dc.month,
+        dc.day,
+        prayerTime.hour,
+        prayerTime.minute,
+      );
       if (now.isAfter(prayerDateTime)) {
         currentPrayer = prayer;
       }
@@ -207,13 +239,25 @@ class PrayerService {
 
   static Prayer? getNextPrayer(PrayerTimes prayerTimes) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final prayers = [Prayer.fajr, Prayer.dhuhr, Prayer.asr, Prayer.maghrib, Prayer.isha];
+    final dc = prayerTimes.dateComponents;
+    final prayers = [
+      Prayer.fajr,
+      Prayer.dhuhr,
+      Prayer.asr,
+      Prayer.maghrib,
+      Prayer.isha,
+    ];
 
     for (var prayer in prayers) {
       final prayerTime = prayerTimes.timeForPrayer(prayer);
       if (prayerTime == null) continue;
-      final prayerDateTime = DateTime(today.year, today.month, today.day, prayerTime.hour, prayerTime.minute);
+      final prayerDateTime = DateTime(
+        dc.year,
+        dc.month,
+        dc.day,
+        prayerTime.hour,
+        prayerTime.minute,
+      );
       if (now.isBefore(prayerDateTime)) {
         return prayer;
       }
@@ -226,16 +270,22 @@ class PrayerService {
     if (nextPrayer == null) return 0;
 
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final dc = prayerTimes.dateComponents;
     final prayerTime = prayerTimes.timeForPrayer(nextPrayer);
     if (prayerTime == null) return 0;
 
-    DateTime prayerDateTime;
-    if (nextPrayer == Prayer.fajr && now.hour > 12) {
-      final tomorrow = today.add(const Duration(days: 1));
-      prayerDateTime = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, prayerTime.hour, prayerTime.minute);
-    } else {
-      prayerDateTime = DateTime(today.year, today.month, today.day, prayerTime.hour, prayerTime.minute);
+    DateTime prayerDateTime = DateTime(
+      dc.year,
+      dc.month,
+      dc.day,
+      prayerTime.hour,
+      prayerTime.minute,
+    );
+    
+    // If the calculated prayer time is already in the past, it must be for the next day 
+    // (e.g., it's 1 AM Monday, we're looking at Sunday's PT, next prayer is Fajr).
+    if (now.isAfter(prayerDateTime)) {
+      prayerDateTime = prayerDateTime.add(const Duration(days: 1));
     }
 
     return prayerDateTime.difference(now).inSeconds;

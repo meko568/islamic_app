@@ -6,6 +6,7 @@ import '../models/daily_task_model.dart';
 import '../services/tracker_storage_service.dart';
 import '../services/cloud_sync_service.dart';
 import '../services/prayer_service.dart';
+import 'achievement_provider.dart';
 
 class TrackerProvider extends ChangeNotifier {
   final CloudSyncService _sync = CloudSyncService();
@@ -17,11 +18,16 @@ class TrackerProvider extends ChangeNotifier {
   List<CustomTaskDef> _customTasks = [];
   bool _loading = true;
   PrayerTimes? _prayerTimes;
+  AchievementProvider? _achievements;
 
   String get date => _date;
   DailyRecord get record => _record;
   List<CustomTaskDef> get customTasks => _customTasks;
   bool get loading => _loading;
+
+  void setAchievementProvider(AchievementProvider provider) {
+    _achievements = provider;
+  }
 
   List<DailyTaskDef> get allTasks => [
     ...DailyTaskDef.presets,
@@ -66,14 +72,12 @@ class TrackerProvider extends ChangeNotifier {
   /// so a prayer marked there shows up here automatically (only valid for
   /// the current calendar day, since PrayerService only tracks "today").
   Future<void> _mergeAutoDetectedPrayers() async {
-    final today = await TrackerStorageService.getCurrentTrackerDate();
-    if (_date != today) return;
-
     bool changed = false;
     for (final entry in _prayerTaskMap.entries) {
       final alreadyDone = _record.tasks[entry.key]?.done ?? false;
       if (alreadyDone) continue;
-      final checked = await PrayerService.isPrayerChecked(entry.value);
+      // Use the record's date (which is the tracker-day date)
+      final checked = await PrayerService.isPrayerChecked(entry.value, date: _date);
       if (checked) {
         _record.tasks[entry.key] = TaskCompletion(done: true, auto: true);
         changed = true;
@@ -104,7 +108,11 @@ class TrackerProvider extends ChangeNotifier {
     if (prayer == null || _prayerTimes == null) return false;
     final time = _prayerTimes!.timeForPrayer(prayer);
     if (time == null) return false;
-    return DateTime.now().isBefore(time);
+    
+    final dc = _prayerTimes!.dateComponents;
+    final prayerDateTime = DateTime(dc.year, dc.month, dc.day, time.hour, time.minute);
+    
+    return DateTime.now().isBefore(prayerDateTime);
   }
 
   /// Marks a task as done automatically from another screen (e.g. finishing
@@ -115,6 +123,7 @@ class TrackerProvider extends ChangeNotifier {
     notifyListeners();
     await TrackerStorageService.saveRecord(_record);
     _sync.pushOnDataChange(_uid);
+    _achievements?.checkAndUnlock();
   }
 
   Future<void> toggleTask(String taskId) async {
@@ -124,13 +133,14 @@ class TrackerProvider extends ChangeNotifier {
     await TrackerStorageService.saveRecord(_record);
 
     // Two-way sync: a manual check here also marks the prayer as prayed
-    // on the Prayer Times screen.
+    // on the Prayer Times screen for the same tracker day.
     final prayer = _prayerTaskMap[taskId];
     if (prayer != null) {
-      await PrayerService.setPrayerChecked(prayer, !current);
+      await PrayerService.setPrayerChecked(prayer, !current, date: _date);
     }
 
     _sync.pushOnDataChange(_uid);
+    _achievements?.checkAndUnlock();
   }
 
   Future<void> addCustomTask(String title) async {

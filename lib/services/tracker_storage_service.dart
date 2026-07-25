@@ -44,34 +44,17 @@ class TrackerStorageService {
   static Future<PrayerTimes?> getTodayPrayerTimes() async {
     final loc = await _getCachedLocation();
     if (loc == null) return null;
-    final coordinates = Coordinates(loc.lat, loc.lng);
-    final params = CalculationMethod.egyptian.getParameters();
-    return PrayerTimes(
-      coordinates,
-      DateComponents.from(DateTime.now()),
-      params,
-    );
+    return PrayerService.calculatePrayerTimes(loc.lat, loc.lng);
   }
 
   /// Returns today's tracker-day date string, falling back to the plain
   /// calendar day if location isn't available.
   static Future<String> getCurrentTrackerDate() async {
-    final now = DateTime.now();
-    final loc = await _getCachedLocation();
-    if (loc != null) {
-      final coordinates = Coordinates(loc.lat, loc.lng);
-      final params = CalculationMethod.egyptian.getParameters();
-      final prayerTimes = PrayerTimes(
-        coordinates,
-        DateComponents.from(now),
-        params,
-      );
-      final fajr = prayerTimes.timeForPrayer(Prayer.fajr);
-      if (fajr != null && now.isBefore(fajr)) {
-        return _fmt.format(now.subtract(const Duration(days: 1)));
-      }
+    final pt = await getTodayPrayerTimes();
+    if (pt != null) {
+      return PrayerService.getDateString(pt);
     }
-    return _fmt.format(now);
+    return _fmt.format(DateTime.now());
   }
 
   static Future<DailyRecord> loadRecord(String date) async {

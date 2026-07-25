@@ -5,8 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/daily_task_model.dart';
 import '../models/target_model.dart';
+import '../models/achievement_model.dart';
 import 'tracker_storage_service.dart';
 import 'target_storage_service.dart';
+import 'achievement_service.dart';
 
 /// Best-effort Firestore backup/restore. Local storage is the source of truth.
 /// This service mirrors local data to the cloud when signed in and online.
@@ -40,6 +42,7 @@ class CloudSyncService {
       final prefs = await SharedPreferences.getInstance();
       
       // 1. Settings & Reminders & Stats
+      final stats = await AchievementService.loadStats();
       final settingsData = {
         'theme_mode': prefs.getString('theme_mode'),
         'app_language': prefs.getString('app_language'),
@@ -58,6 +61,7 @@ class CloudSyncService {
         'daily_tasks_history': prefs.getString('daily_tasks_history'),
         'islamic_targets_history': prefs.getString('islamic_targets_history'),
         
+        'user_stats': stats.toJson(),
         'lastUpdated': FieldValue.serverTimestamp(),
       };
       
@@ -153,6 +157,11 @@ class CloudSyncService {
         if (data['lifetime_tasbeeh_count'] != null) await prefs.setInt('lifetime_tasbeeh_count', (data['lifetime_tasbeeh_count'] as num).toInt());
         if (data['daily_tasks_history'] != null) await prefs.setString('daily_tasks_history', data['daily_tasks_history']);
         if (data['islamic_targets_history'] != null) await prefs.setString('islamic_targets_history', data['islamic_targets_history']);
+        
+        if (data['user_stats'] != null) {
+          final stats = UserStats.fromJson(Map<String, dynamic>.from(data['user_stats'] as Map));
+          await AchievementService.saveStats(stats);
+        }
         
         // Restore tasbeeh data
         final tasbeehData = data['tasbeeh_data'] as Map<String, dynamic>?;

@@ -22,6 +22,7 @@ import 'providers/reminder_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/tracker_provider.dart';
 import 'providers/target_provider.dart';
+import 'providers/achievement_provider.dart';
 import 'services/reminder_scheduler_service.dart';
 import 'services/cloud_sync_service.dart';
 import 'overlay/tasbeeh_overlay_app.dart';
@@ -125,8 +126,17 @@ class IslamicApp extends StatelessWidget {
           create: (_) => ReminderProvider()..loadSettings(),
         ),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => TrackerProvider()),
-        ChangeNotifierProvider(create: (_) => TargetProvider()),
+        ChangeNotifierProvider(create: (_) => AchievementProvider()),
+        ChangeNotifierProxyProvider<AchievementProvider, TrackerProvider>(
+          create: (_) => TrackerProvider(),
+          update: (_, achievements, tracker) =>
+              tracker!..setAchievementProvider(achievements),
+        ),
+        ChangeNotifierProxyProvider<AchievementProvider, TargetProvider>(
+          create: (_) => TargetProvider(),
+          update: (_, achievements, target) =>
+              target!..setAchievementProvider(achievements),
+        ),
       ],
       child: const _AuthSync(child: _AppView()),
     );
@@ -187,6 +197,7 @@ class _AuthSyncState extends State<_AuthSync> with WidgetsBindingObserver {
         context.read<ReminderProvider>().attachUser(uid);
         context.read<TrackerProvider>().attachUser(uid);
         context.read<TargetProvider>().attachUser(uid);
+        context.read<AchievementProvider>().updateUid(uid);
 
         // 2. Perform sync if logged in and it's a fresh login (not just app restart)
         if (uid != null && wasNull) {
@@ -204,6 +215,7 @@ class _AuthSyncState extends State<_AuthSync> with WidgetsBindingObserver {
             await context.read<ReminderProvider>().loadSettings();
             await context.read<TrackerProvider>().load();
             await context.read<TargetProvider>().load();
+            await context.read<AchievementProvider>().load();
           }
         }
       });

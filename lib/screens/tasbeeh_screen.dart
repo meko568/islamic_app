@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_strings.dart';
 import '../providers/settings_provider.dart';
 import '../providers/target_provider.dart';
+import '../providers/achievement_provider.dart';
 import '../services/stats_service.dart';
 import '../services/cloud_sync_service.dart';
 
@@ -189,7 +190,11 @@ class _TasbeehScreenState extends State<TasbeehScreen> {
     });
     _saveCounters();
     context.read<TargetProvider>().incrementAllByLinkType('tasbeeh');
-    StatsService.incrementLifetimeTasbeeh();
+    StatsService.incrementLifetimeTasbeeh().then((_) {
+      if (mounted) {
+        context.read<AchievementProvider>().checkAndUnlock();
+      }
+    });
     
     // Sync to cloud (debounced)
     final uid = FirebaseAuth.instance.currentUser?.uid;

@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../models/target_model.dart';
 import '../services/target_storage_service.dart';
 import '../services/cloud_sync_service.dart';
+import 'achievement_provider.dart';
 
 class TargetProvider extends ChangeNotifier {
   final CloudSyncService _sync = CloudSyncService();
@@ -13,10 +14,15 @@ class TargetProvider extends ChangeNotifier {
   List<IslamicTarget> _targets = [];
   List<GoalHistoryRecord> _history = [];
   bool _loading = true;
+  AchievementProvider? _achievements;
 
   List<IslamicTarget> get targets => _targets;
   List<GoalHistoryRecord> get history => _history;
   bool get loading => _loading;
+
+  void setAchievementProvider(AchievementProvider provider) {
+    _achievements = provider;
+  }
 
   TargetProvider() {
     load();
@@ -83,6 +89,7 @@ class TargetProvider extends ChangeNotifier {
     await TargetStorageService.saveTargets(_targets);
     notifyListeners();
     _sync.pushOnDataChange(_uid);
+    _achievements?.checkAndUnlock();
   }
 
   Future<void> updateTarget({
@@ -120,6 +127,7 @@ class TargetProvider extends ChangeNotifier {
     await TargetStorageService.saveTargets(_targets);
     notifyListeners();
     _sync.pushOnDataChange(_uid);
+    _achievements?.checkAndUnlock();
   }
 
   Future<void> setProgress(String id, int value) async {
@@ -128,6 +136,7 @@ class TargetProvider extends ChangeNotifier {
     await TargetStorageService.saveTargets(_targets);
     notifyListeners();
     _sync.pushOnDataChange(_uid);
+    _achievements?.checkAndUnlock();
   }
 
   /// Called from the Tasbeeh screen on every tap: bumps every active target
@@ -144,6 +153,7 @@ class TargetProvider extends ChangeNotifier {
       await TargetStorageService.saveTargets(_targets);
       notifyListeners();
       _sync.pushOnDataChange(_uid);
+      _achievements?.checkAndUnlock();
     }
   }
 
