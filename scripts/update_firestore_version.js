@@ -1,4 +1,5 @@
-const admin = require('firebase-admin');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 
 const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 if (!serviceAccountPath) {
@@ -6,11 +7,13 @@ if (!serviceAccountPath) {
   process.exit(1);
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(require(serviceAccountPath))
+const serviceAccount = require(serviceAccountPath);
+
+initializeApp({
+  credential: cert(serviceAccount)
 });
 
-const db = admin.firestore();
+const db = getFirestore();
 
 async function updateVersion() {
   const args = process.argv.slice(2);
