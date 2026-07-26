@@ -143,7 +143,7 @@ class Achievement {
       icon: 'assets/badges/azkar_7.png',
     ),
     Achievement(
-      id: 'azkar_dedicated_30',
+      id: 'azkar_daily_30',
       titleAr: 'مطمئن القلب',
       titleEn: 'Peaceful Heart',
       descriptionAr: 'أكملت أذكار الصباح والمساء لـ ٣٠ يوم متتالية',

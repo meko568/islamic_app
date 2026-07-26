@@ -63,6 +63,9 @@ class AchievementService {
       } else if (achievement.id.startsWith('maghrib_')) {
         int days = int.parse(achievement.id.split('_')[1]);
         unlocked = _checkTaskStreak(allRecords, 'prayer_maghrib', days);
+      } else if (achievement.id.startsWith('isha_')) {
+        int days = int.parse(achievement.id.split('_')[1]);
+        unlocked = _checkTaskStreak(allRecords, 'prayer_isha', days);
       } else if (achievement.id == 'prayer_all_1') {
         unlocked = _checkTotalDaysWithTasks(allRecords, 
           ['prayer_fajr', 'prayer_dhuhr', 'prayer_asr', 'prayer_maghrib', 'prayer_isha'], 1);
@@ -77,14 +80,20 @@ class AchievementService {
          int days = int.parse(achievement.id.split('_')[2]);
          unlocked = _checkTaskStreak(allRecords, ['morning_azkar', 'evening_azkar'], days);
       } else if (achievement.id.startsWith('azkar_')) {
-         int days = int.parse(achievement.id.split('_')[1]);
-         unlocked = _checkTaskStreak(allRecords, ['morning_azkar', 'evening_azkar'], days);
+         final parts = achievement.id.split('_');
+         int? days = int.tryParse(parts[1]);
+         if (days != null) {
+           unlocked = _checkTaskStreak(allRecords, ['morning_azkar', 'evening_azkar'], days);
+         }
       } else if (achievement.id.startsWith('quran_')) {
          int days = int.parse(achievement.id.split('_')[1]);
          unlocked = _checkTaskStreak(allRecords, 'quran_wird', days);
       } else if (achievement.id.startsWith('consistent_')) {
-        int count = int.parse(achievement.id.split('_')[1]);
-        unlocked = _getTotalCompletedTasks(allRecords) >= count;
+        final parts = achievement.id.split('_');
+        int? count = int.tryParse(parts[1]);
+        if (count != null) {
+          unlocked = _getTotalCompletedTasks(allRecords) >= count;
+        }
       } else if (achievement.id == 'early_bird_7') {
         unlocked = _checkTaskStreak(allRecords, ['prayer_fajr', 'morning_azkar'], 7);
       } else if (achievement.id == 'custom_tasks_1') {
