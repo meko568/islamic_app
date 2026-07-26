@@ -187,6 +187,16 @@ class Achievement {
       icon: 'assets/badges/target_1.png',
     ),
     Achievement(
+      id: 'targets_5',
+      titleAr: 'خماسية الإنجاز',
+      titleEn: 'Five Goals',
+      descriptionAr: 'أنجزت ٥ أهداف إسلامية',
+      descriptionEn: 'Completed 5 Islamic targets',
+      category: AchievementCategory.targets,
+      xpReward: 500,
+      icon: 'assets/badges/target_5.png',
+    ),
+    Achievement(
       id: 'targets_10',
       titleAr: 'مُحقق الأهداف',
       titleEn: 'Goal Achiever',
@@ -195,6 +205,26 @@ class Achievement {
       category: AchievementCategory.targets,
       xpReward: 1000,
       icon: 'assets/badges/target_10.png',
+    ),
+    Achievement(
+      id: 'targets_25',
+      titleAr: 'عزيمة لا تلين',
+      titleEn: 'Unwavering Resolve',
+      descriptionAr: 'أنجزت ٢٥ هدفاً إسلامياً',
+      descriptionEn: 'Completed 25 Islamic targets',
+      category: AchievementCategory.targets,
+      xpReward: 3000,
+      icon: 'assets/badges/target_25.png',
+    ),
+    Achievement(
+      id: 'targets_50',
+      titleAr: 'سيد الأهداف',
+      titleEn: 'Master of Goals',
+      descriptionAr: 'أنجزت ٥٠ هدفاً إسلامياً',
+      descriptionEn: 'Completed 50 Islamic targets',
+      category: AchievementCategory.targets,
+      xpReward: 7000,
+      icon: 'assets/badges/target_50.png',
     ),
     
     // --- Add more to reach 50 ---

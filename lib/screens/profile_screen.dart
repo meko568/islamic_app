@@ -6,8 +6,8 @@ import '../providers/settings_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/tracker_provider.dart';
 import '../services/stats_service.dart';
-import '../theme/app_theme.dart';
-import 'login_screen.dart';
+import '../providers/achievement_provider.dart';
+import '../models/achievement_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -87,6 +87,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final lang = context.watch<SettingsProvider>().appLanguage;
     final auth = context.watch<AuthProvider>();
+    final achievementProvider = context.watch<AchievementProvider>();
+    final stats = achievementProvider.stats;
 
     return Directionality(
       textDirection: lang == 'ar' ? TextDirection.rtl : TextDirection.ltr,
@@ -96,28 +98,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              CircleAvatar(
-                radius: 36,
-                backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-                child: Icon(
-                  auth.isLoggedIn ? Icons.person : Icons.person_outline,
-                  size: 36,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Center(
-                child: Text(
-                  auth.isLoggedIn
-                      ? (auth.user?.email ?? AppStrings.get('signed_in_as', lang))
-                      : AppStrings.get('guest_account', lang),
-                  style: GoogleFonts.cairo(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+              // Profile Header
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 36,
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                    child: Icon(
+                      auth.isLoggedIn ? Icons.person : Icons.person_outline,
+                      size: 36,
+                      color: AppColors.primary,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          auth.isLoggedIn
+                              ? (auth.user?.email ?? AppStrings.get('signed_in_as', lang))
+                              : AppStrings.get('guest_account', lang),
+                          style: GoogleFonts.cairo(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                          ),
+                          child: Text(
+                            '${lang == 'ar' ? 'المستوى' : 'Level'} ${stats.currentLevel}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Colors.orange,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
+              
+              const SizedBox(height: 20),
+
+              // Level Progress
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${stats.totalXp} XP',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '${UserStats.xpForLevel(stats.currentLevel + 1)} XP',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: LinearProgressIndicator(
+                      value: stats.levelProgress,
+                      minHeight: 10,
+                      backgroundColor: Colors.grey.shade200,
+                      color: Colors.amber,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 32),
               if (_loading)
                 const Center(child: CircularProgressIndicator())
               else

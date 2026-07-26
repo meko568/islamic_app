@@ -93,8 +93,26 @@ class AchievementService {
         unlocked = customTasksCount >= 5;
       } else if (achievement.id == 'targets_1') {
         unlocked = completedTargetsCount >= 1;
+      } else if (achievement.id == 'targets_5') {
+        unlocked = completedTargetsCount >= 5;
       } else if (achievement.id == 'targets_10') {
         unlocked = completedTargetsCount >= 10;
+      } else if (achievement.id == 'targets_25') {
+        unlocked = completedTargetsCount >= 25;
+      } else if (achievement.id == 'targets_50') {
+        unlocked = completedTargetsCount >= 50;
+      }
+      } else if (achievement.id == 'friday_master') {
+        final now = DateTime.now();
+        if (now.weekday == DateTime.friday) {
+          final todayStr = now.toIso8601String().split('T')[0];
+          final todayRecord = allRecords.any((r) => r.date == todayStr) 
+              ? allRecords.firstWhere((r) => r.date == todayStr)
+              : null;
+          if (todayRecord != null) {
+            unlocked = DailyTaskDef.presets.every((task) => todayRecord.tasks[task.id]?.done ?? false);
+          }
+        }
       }
       // Note: Friday master and targets will need specific logic or to be triggered from elsewhere
 

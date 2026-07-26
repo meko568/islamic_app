@@ -30,6 +30,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 
 import 'screens/onboarding_screen.dart';
+import 'widgets/badge_unlock_overlay.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -229,9 +230,10 @@ class _AppView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
       builder: (context, settings, _) {
-        return MaterialApp(
-          navigatorKey: navigatorKey,
-          title: 'دَرْبُ الْإِيمَانِ',
+        return BadgeUnlockOverlay(
+          child: MaterialApp(
+            navigatorKey: navigatorKey,
+            title: 'دَرْبُ الْإِيمَانِ',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme(settings.appFontSize),
           darkTheme: AppTheme.darkTheme(settings.appFontSize),
@@ -264,7 +266,7 @@ class _AppView extends StatelessWidget {
             }
             return null;
           },
-        );
+        ),);
       },
     );
   }

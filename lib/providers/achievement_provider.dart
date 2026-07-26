@@ -11,6 +11,9 @@ class AchievementProvider extends ChangeNotifier {
   final _newAchievementController = StreamController<Achievement>.broadcast();
   Stream<Achievement> get onAchievementUnlocked => _newAchievementController.stream;
 
+  final _levelUpController = StreamController<int>.broadcast();
+  Stream<int> get onLevelUp => _levelUpController.stream;
+
   UserStats get stats => _stats;
   bool get loading => _loading;
 
@@ -32,6 +35,9 @@ class AchievementProvider extends ChangeNotifier {
     
     _loading = false;
     notifyListeners();
+
+    // After loading, trigger a check to catch anything earned offline or in overlay
+    checkAndUnlock();
   }
 
   void updateUid(String? uid) {
@@ -41,12 +47,24 @@ class AchievementProvider extends ChangeNotifier {
   /// Triggers an achievement check. This should be called when 
   /// tasks are completed or counters updated.
   Future<List<Achievement>> checkAndUnlock() async {
+    final oldLevel = _stats.currentLevel;
     final newAchievements = await AchievementService.checkAchievements(_uid);
-    if (newAchievements.isNotEmpty) {
+    
+    if (newAchievements.isNotEmpty || true) { // Always check stats if we want to catch level ups from XP changes
       _stats = await AchievementService.loadStats();
-      notifyListeners();
-      for (final achievement in newAchievements) {
-        _newAchievementController.add(achievement);
+      final newLevel = _stats.currentLevel;
+      
+      if (newLevel > oldLevel) {
+        _levelUpController.add(newLevel);
+      }
+      
+      if (newAchievements.isNotEmpty) {
+        notifyListeners();
+        for (final achievement in newAchievements) {
+          _newAchievementController.add(achievement);
+        }
+      } else if (newLevel > oldLevel) {
+        notifyListeners();
       }
     }
     return newAchievements;
