@@ -156,7 +156,6 @@ class _AuthSync extends StatefulWidget {
 
 class _AuthSyncState extends State<_AuthSync> with WidgetsBindingObserver {
   String? _lastUid;
-  bool _isSyncing = false;
 
   @override
   void initState() {
@@ -201,60 +200,24 @@ class _AuthSyncState extends State<_AuthSync> with WidgetsBindingObserver {
 
         // 2. Perform sync if logged in and it's a fresh login (not just app restart)
         if (uid != null && wasNull) {
-          setState(() => _isSyncing = true);
-
-          try {
-            await CloudSyncService().syncOnLogin(uid);
-          } finally {
-            if (mounted) setState(() => _isSyncing = false);
-          }
-
-          // 3. Reload providers to pick up restored data
-          if (mounted) {
-            await context.read<SettingsProvider>().loadSettings();
-            await context.read<ReminderProvider>().loadSettings();
-            await context.read<TrackerProvider>().load();
-            await context.read<TargetProvider>().load();
-            await context.read<AchievementProvider>().load();
-          }
+          // Background sync - no blocking UI
+          CloudSyncService().syncOnLogin(uid).then((_) async {
+            if (mounted) {
+              // Reload providers to pick up restored data in the background
+              await context.read<SettingsProvider>().loadSettings();
+              await context.read<ReminderProvider>().loadSettings();
+              await context.read<TrackerProvider>().load();
+              await context.read<TargetProvider>().load();
+              await context.read<AchievementProvider>().load();
+            }
+          });
         }
       });
     }
 
     return Directionality(
       textDirection: lang == 'ar' ? TextDirection.rtl : TextDirection.ltr,
-      child: Stack(
-        children: [
-          widget.child,
-          if (_isSyncing)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black54,
-                child: Center(
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(),
-                          const SizedBox(height: 16),
-                          Text(
-                            lang == 'ar'
-                                ? 'جاري مزامنة البيانات...'
-                                : 'Syncing data...',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+      child: widget.child,
     );
   }
 }

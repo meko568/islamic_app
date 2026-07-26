@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,6 +24,15 @@ class CloudSyncService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   Timer? _debounceTimer;
 
+  Future<bool> _isOnline() async {
+    try {
+      final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // Firestore Document Paths
   DocumentReference _userDoc(String uid) => _db.collection('users').doc(uid);
   
@@ -38,6 +48,7 @@ class CloudSyncService {
 
   /// Reads all relevant local data and pushes it to Firestore.
   Future<void> pushLocalDataToCloud(String uid) async {
+    if (!await _isOnline()) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       
@@ -132,6 +143,7 @@ class CloudSyncService {
   /// Pulls data from Firestore and restores it to local storage.
   /// Returns true if any data was restored.
   Future<bool> pullCloudDataToLocal(String uid) async {
+    if (!await _isOnline()) return false;
     try {
       final prefs = await SharedPreferences.getInstance();
       bool restoredAny = false;
@@ -228,14 +240,15 @@ class CloudSyncService {
 
   /// Called after login. Decides whether to push or pull.
   Future<void> syncOnLogin(String uid) async {
+    if (!await _isOnline()) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       
       // Check if local data is "fresh"
       final isFresh = prefs.getBool('is_first_launch') ?? true;
       
-      // Check if cloud data exists
-      final settingsSnap = await _settingsDoc(uid).get();
+      // Check if cloud data exists - with timeout
+      final settingsSnap = await _settingsDoc(uid).get().timeout(const Duration(seconds: 10));
       
       if (settingsSnap.exists) {
         // If cloud data exists, we almost always want to PULL it after a reinstall
