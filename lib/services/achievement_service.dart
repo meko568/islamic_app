@@ -101,7 +101,6 @@ class AchievementService {
         unlocked = completedTargetsCount >= 25;
       } else if (achievement.id == 'targets_50') {
         unlocked = completedTargetsCount >= 50;
-      }
       } else if (achievement.id == 'friday_master') {
         final now = DateTime.now();
         if (now.weekday == DateTime.friday) {

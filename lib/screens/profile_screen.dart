@@ -8,6 +8,8 @@ import '../providers/tracker_provider.dart';
 import '../services/stats_service.dart';
 import '../providers/achievement_provider.dart';
 import '../models/achievement_model.dart';
+import '../theme/app_theme.dart';
+import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -208,7 +210,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               else
                 FilledButton.icon(
                   onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    MaterialPageRoute(builder: (_) => LoginScreen()),
                   ),
                   icon: const Icon(Icons.login),
                   label: Text(AppStrings.get('login', lang)),
